@@ -14,6 +14,7 @@
 #include "Backup/BackupManager.h"
 #include "BeeftextGlobals.h"
 #include "BeeftextUtils.h"
+#include "BeeftextConstants.h"
 #include <XMiLib/Exception.h>
 
 
@@ -24,6 +25,11 @@ PrefPaneAdvanced::PrefPaneAdvanced(QWidget *parent)
     : PrefPane(parent)
     , prefs_(PreferencesManager::instance()) {
     ui_.setupUi(this);
+    if (constants::kRestrictedBuild) {
+        ui_.checkUseCustomPowershellVersion->setVisible(false);
+        ui_.editCustomPowerShellPath->setVisible(false);
+        ui_.buttonChangeCustomPowershellVersion->setVisible(false);
+    }
     ui_.spinDelayBetweenKeystrokes->setRange(PreferencesManager::minDelayBetweenKeystrokesMs(), PreferencesManager::maxDelayBetweenKeystrokesMs());
     if (isInPortableMode())
         ui_.frameComboListFolder->setVisible(false);
@@ -69,9 +75,9 @@ void PrefPaneAdvanced::load() const {
     blocker = QSignalBlocker(ui_.checkUseShiftInsertForPasting);
     ui_.checkUseShiftInsertForPasting->setChecked(prefs_.useShiftInsertForPasting());
     blocker = QSignalBlocker(ui_.checkUseCustomPowershellVersion);
-    ui_.checkUseCustomPowershellVersion->setChecked(prefs_.useCustomPowershellVersion());
+    ui_.checkUseCustomPowershellVersion->setChecked(constants::kRestrictedBuild ? false : prefs_.useCustomPowershellVersion());
     blocker = QSignalBlocker(ui_.editCustomPowerShellPath);
-    ui_.editCustomPowerShellPath->setText(QDir::toNativeSeparators(prefs_.customPowershellPath()));
+    ui_.editCustomPowerShellPath->setText(constants::kRestrictedBuild ? QString() : QDir::toNativeSeparators(prefs_.customPowershellPath()));
     ui_.checkAutoBackup->setChecked(prefs_.autoBackup());
     blocker = QSignalBlocker(ui_.checkUseCustomBackupLocation);
     ui_.checkUseCustomBackupLocation->setChecked(prefs_.useCustomBackupLocation());
@@ -86,7 +92,7 @@ void PrefPaneAdvanced::load() const {
 //
 //****************************************************************************************************************************************************
 void PrefPaneAdvanced::updateGui() const {
-    bool const customPowershell = ui_.checkUseCustomPowershellVersion->isChecked();
+    bool const customPowershell = !constants::kRestrictedBuild && ui_.checkUseCustomPowershellVersion->isChecked();
     ui_.editCustomPowerShellPath->setEnabled(customPowershell);
     ui_.buttonChangeCustomPowershellVersion->setEnabled(customPowershell);
     ui_.buttonRestoreBackup->setEnabled(BackupManager::instance().backupFileCount());
@@ -216,6 +222,11 @@ void PrefPaneAdvanced::onCheckUseShiftInsertForPasting(bool checked) const {
 /// \param[in] checked Is the check box checked.
 //****************************************************************************************************************************************************
 void PrefPaneAdvanced::onCheckUseCustomPowerShellVersion(bool checked) {
+    if (constants::kRestrictedBuild) {
+        QSignalBlocker blocker(ui_.checkUseCustomPowershellVersion);
+        ui_.checkUseCustomPowershellVersion->setChecked(false);
+        return;
+    }
     if (checked) {
         QString const path = prefs_.customPowershellPath();
         QFileInfo const fi(path);
@@ -236,6 +247,8 @@ void PrefPaneAdvanced::onCheckUseCustomPowerShellVersion(bool checked) {
 //
 //****************************************************************************************************************************************************
 void PrefPaneAdvanced::onChangeCustomPowershellVersion() {
+    if (constants::kRestrictedBuild)
+        return;
     QString const path = QFileDialog::getOpenFileName(this, tr("Select PowerShell executable"), QString(), tr("Executable files (*.exe);;All files (*.*)"));
     if (path.isEmpty())
         return;
