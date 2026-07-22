@@ -19,6 +19,7 @@ Blocked variables remain visible as literal text so unsafe or incompatible impor
 - Reusable combo variables
 - Uppercase, lowercase, and trim combo transformations
 - User-input prompts
+- Cursor positioning with `#{cursor}`; this only repositions the caret within inserted text and cannot launch programs or read external data
 - Local combo storage and backup
 
 ## Update process
@@ -32,4 +33,5 @@ Do not install upstream Beeftext updates over this build. Review upstream change
 3. Confirm `#{shortcut:Win+R}` remains literal and does not open the Run dialog.
 4. Confirm `#{key:enter}` remains literal and does not press Enter.
 5. Confirm `#{clipboard}` remains literal and does not paste clipboard contents.
-6. Confirm update controls are hidden and no request is made to `beeftext.org` during startup.
+6. Confirm `#{cursor}` still repositions the caret within an ordinary snippet.
+7. Confirm update controls are hidden and no request is made to `beeftext.org` during startup.
