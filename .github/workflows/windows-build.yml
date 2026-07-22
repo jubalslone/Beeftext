@@ -166,10 +166,11 @@ jobs:
             Get-ChildItem -Path $redistRoot -Directory | Select-Object FullName
 
             $redistVersion = Get-ChildItem -Path $redistRoot -Directory |
+              Where-Object { $_.Name -match '^\d+(\.\d+)+$' } |
               Sort-Object { [version]$_.Name } -Descending |
               Select-Object -First 1
             if (-not $redistVersion) {
-              throw "Could not locate a Visual C++ runtime under $redistRoot."
+              throw "Could not locate a numeric Visual C++ runtime version under $redistRoot."
             }
 
             $x64RedistRoot = Join-Path $redistVersion.FullName 'x64'
