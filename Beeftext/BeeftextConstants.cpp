@@ -15,6 +15,7 @@ namespace constants {
 
 
 xmilib::VersionNumber const kVersionNumber(16, 0);
+bool const kRestrictedBuild = true;
 QString const kApplicationName = "Beeftext";
 QString const kOrganizationName = "beeftext.org";
 QString const kBeeftextWikiHomeUrl = "https://github.com/xmichelo/Beeftext/wiki";
