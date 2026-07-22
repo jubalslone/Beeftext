@@ -71,6 +71,17 @@ jobs:
             Write-Host "Added Win32 SDK declarations to $headerPath."
           }
 
+          $cmakePath = 'Beeftext/CMakeLists.txt'
+          $cmake = Get-Content -Path $cmakePath -Raw
+          $consoleTarget = 'add_executable(Beeftext'
+          $guiTarget = 'add_executable(Beeftext WIN32'
+          if (-not $cmake.Contains($consoleTarget)) {
+            throw "Could not locate the Beeftext executable declaration in $cmakePath."
+          }
+          $cmake = $cmake.Replace($consoleTarget, $guiTarget)
+          Set-Content -Path $cmakePath -Value $cmake -Encoding utf8
+          Write-Host 'Configured Beeftext as a Windows GUI executable.'
+
       - name: Configure CMake
         shell: pwsh
         run: |
@@ -139,6 +150,29 @@ jobs:
           & windeployqt --release --compiler-runtime --dir $package (Join-Path $package 'Beeftext.exe')
           if ($LASTEXITCODE -ne 0) {
             throw "windeployqt failed with exit code $LASTEXITCODE."
+          }
+
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vsInstall = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Redist.14.Latest -property installationPath
+          if (-not $vsInstall) {
+            throw 'Could not locate the Visual C++ Redistributable files.'
+          }
+
+          $redistRoot = Join-Path $vsInstall 'VC/Redist/MSVC'
+          $redistVersion = Get-ChildItem -Path $redistRoot -Directory |
+            Sort-Object { [version]$_.Name } -Descending |
+            Select-Object -First 1
+          $crtDir = Get-ChildItem -Path (Join-Path $redistVersion.FullName 'x64') -Directory -Filter 'Microsoft.VC*.CRT' |
+            Select-Object -First 1
+          if (-not $crtDir) {
+            throw 'Could not locate the x64 Visual C++ runtime directory.'
+          }
+          Copy-Item -Path (Join-Path $crtDir.FullName '*.dll') -Destination $package
+
+          foreach ($runtimeDll in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
+            if (-not (Test-Path (Join-Path $package $runtimeDll))) {
+              throw "The portable package is missing $runtimeDll."
+            }
           }
 
           Copy-Item -Path LICENSE -Destination $package
