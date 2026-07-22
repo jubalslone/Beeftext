@@ -11,6 +11,7 @@
 #include "Preferences/PreferencesManager.h"
 #include "Clipboard/ClipboardManager.h"
 #include "BeeftextGlobals.h"
+#include "BeeftextConstants.h"
 #include <XMiLib/RandomNumberGenerator.h>
 #include <XMiLib/Exception.h>
 
@@ -216,7 +217,6 @@ QString evaluateComboVariable(QString const &variable, ECaseChange caseChange, Q
         if (combo->keyword() == comboName)
             results.push_back(combo);
 
-
     qint32 const resultCount = results.size();
     ComboList::const_iterator it;
     switch (resultCount) {
@@ -349,6 +349,16 @@ QString evaluateVariable(QString const &variable, QSet<QString> const &forbidden
     QMap<QString, QString> &knownInputVariables, bool &outCancelled) {
     outCancelled = false;
     QLocale const systemLocale = QLocale::system();
+
+    // The restricted build is intended for ordinary text expansion only. Keep blocked
+    // variables visible in the expanded text so imported or legacy combos fail safely
+    // and can be corrected, rather than silently executing or exposing user data.
+    if (constants::kRestrictedBuild && ((variable == "clipboard") || (variable == "discordemoji")
+        || variable.startsWith(kEnvVarVariable) || variable.startsWith(kPowershellVariable))) {
+        globals::debugLog().addWarning("Blocked a restricted combo variable.");
+        return QString("#{%1}").arg(variable);
+    }
+
     if (variable == "clipboard")
         return ClipboardManager::instance().text();
 
