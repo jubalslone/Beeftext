@@ -153,20 +153,26 @@ jobs:
           }
 
           $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-          $vsInstall = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Redist.14.Latest -property installationPath
+          $vsInstall = & $vswhere -latest -products * -property installationPath
           if (-not $vsInstall) {
-            throw 'Could not locate the Visual C++ Redistributable files.'
+            throw 'Could not locate the Visual Studio installation.'
           }
+          Write-Host "Visual Studio installation: $vsInstall"
 
           $redistRoot = Join-Path $vsInstall 'VC/Redist/MSVC'
           $redistVersion = Get-ChildItem -Path $redistRoot -Directory |
             Sort-Object { [version]$_.Name } -Descending |
             Select-Object -First 1
+          if (-not $redistVersion) {
+            throw "Could not locate a Visual C++ runtime under $redistRoot."
+          }
+
           $crtDir = Get-ChildItem -Path (Join-Path $redistVersion.FullName 'x64') -Directory -Filter 'Microsoft.VC*.CRT' |
             Select-Object -First 1
           if (-not $crtDir) {
             throw 'Could not locate the x64 Visual C++ runtime directory.'
           }
+          Write-Host "Visual C++ runtime directory: $($crtDir.FullName)"
           Copy-Item -Path (Join-Path $crtDir.FullName '*.dll') -Destination $package
 
           foreach ($runtimeDll in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
