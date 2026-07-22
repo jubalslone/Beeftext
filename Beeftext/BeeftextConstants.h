@@ -21,7 +21,6 @@ namespace constants {
 
 
 extern xmilib::VersionNumber const kVersionNumber; ///< The version number of the application.
-extern bool const kRestrictedBuild; ///< Whether this build is limited to non-executable text expansion features.
 
 QChar constexpr kEmojiDelimiter = '|'; ///< The delimiter for emojis
 QColor constexpr blueBeeftextColor(0x25, 0x8c, 0xc0); ///< Return the blue color used for the GUI.
