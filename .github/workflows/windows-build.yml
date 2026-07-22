@@ -127,65 +127,87 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          Start-Transcript -Path package-output.log -Force
+          try {
+            $exe = Get-ChildItem -Path build -Recurse -File -Filter Beeftext.exe |
+              Where-Object { $_.FullName -match '[\\/]Release[\\/]' } |
+              Select-Object -First 1
 
-          $exe = Get-ChildItem -Path build -Recurse -File -Filter Beeftext.exe |
-            Where-Object { $_.FullName -match '[\\/]Release[\\/]' } |
-            Select-Object -First 1
-
-          if (-not $exe) {
-            Write-Host 'Build output:'
-            Get-ChildItem -Path build -Recurse -File | Select-Object FullName
-            throw 'Could not locate the Release Beeftext.exe.'
-          }
-
-          $package = Join-Path $PWD 'artifact/Beeftext-TLF-Safe'
-          New-Item -ItemType Directory -Path $package -Force | Out-Null
-          Copy-Item -Path $exe.FullName -Destination $package
-
-          $translationDir = Join-Path $exe.DirectoryName 'translations'
-          if (Test-Path $translationDir) {
-            Copy-Item -Path $translationDir -Destination $package -Recurse
-          }
-
-          & windeployqt --release --compiler-runtime --dir $package (Join-Path $package 'Beeftext.exe')
-          if ($LASTEXITCODE -ne 0) {
-            throw "windeployqt failed with exit code $LASTEXITCODE."
-          }
-
-          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
-          $vsInstall = & $vswhere -latest -products * -property installationPath
-          if (-not $vsInstall) {
-            throw 'Could not locate the Visual Studio installation.'
-          }
-          Write-Host "Visual Studio installation: $vsInstall"
-
-          $redistRoot = Join-Path $vsInstall 'VC/Redist/MSVC'
-          $redistVersion = Get-ChildItem -Path $redistRoot -Directory |
-            Sort-Object { [version]$_.Name } -Descending |
-            Select-Object -First 1
-          if (-not $redistVersion) {
-            throw "Could not locate a Visual C++ runtime under $redistRoot."
-          }
-
-          $crtDir = Get-ChildItem -Path (Join-Path $redistVersion.FullName 'x64') -Directory -Filter 'Microsoft.VC*.CRT' |
-            Select-Object -First 1
-          if (-not $crtDir) {
-            throw 'Could not locate the x64 Visual C++ runtime directory.'
-          }
-          Write-Host "Visual C++ runtime directory: $($crtDir.FullName)"
-          Copy-Item -Path (Join-Path $crtDir.FullName '*.dll') -Destination $package
-
-          foreach ($runtimeDll in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
-            if (-not (Test-Path (Join-Path $package $runtimeDll))) {
-              throw "The portable package is missing $runtimeDll."
+            if (-not $exe) {
+              Write-Host 'Build output:'
+              Get-ChildItem -Path build -Recurse -File | Select-Object FullName
+              throw 'Could not locate the Release Beeftext.exe.'
             }
+            Write-Host "Executable: $($exe.FullName)"
+
+            $package = Join-Path $PWD 'artifact/Beeftext-TLF-Safe'
+            New-Item -ItemType Directory -Path $package -Force | Out-Null
+            Copy-Item -Path $exe.FullName -Destination $package
+
+            $translationDir = Join-Path $exe.DirectoryName 'translations'
+            if (Test-Path $translationDir) {
+              Copy-Item -Path $translationDir -Destination $package -Recurse
+            }
+
+            & windeployqt --release --compiler-runtime --dir $package (Join-Path $package 'Beeftext.exe')
+            if ($LASTEXITCODE -ne 0) {
+              throw "windeployqt failed with exit code $LASTEXITCODE."
+            }
+
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+            $vsInstall = & $vswhere -latest -products * -property installationPath
+            if (-not $vsInstall) {
+              throw 'Could not locate the Visual Studio installation.'
+            }
+            Write-Host "Visual Studio installation: $vsInstall"
+
+            $redistRoot = Join-Path $vsInstall 'VC/Redist/MSVC'
+            Write-Host "Visual C++ redist root: $redistRoot"
+            Get-ChildItem -Path $redistRoot -Directory | Select-Object FullName
+
+            $redistVersion = Get-ChildItem -Path $redistRoot -Directory |
+              Sort-Object { [version]$_.Name } -Descending |
+              Select-Object -First 1
+            if (-not $redistVersion) {
+              throw "Could not locate a Visual C++ runtime under $redistRoot."
+            }
+
+            $x64RedistRoot = Join-Path $redistVersion.FullName 'x64'
+            Write-Host "Visual C++ x64 redist root: $x64RedistRoot"
+            Get-ChildItem -Path $x64RedistRoot -Directory | Select-Object FullName
+
+            $crtDir = Get-ChildItem -Path $x64RedistRoot -Directory -Filter 'Microsoft.VC*.CRT' |
+              Select-Object -First 1
+            if (-not $crtDir) {
+              throw 'Could not locate the x64 Visual C++ runtime directory.'
+            }
+            Write-Host "Visual C++ runtime directory: $($crtDir.FullName)"
+            Copy-Item -Path (Join-Path $crtDir.FullName '*.dll') -Destination $package
+
+            foreach ($runtimeDll in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
+              if (-not (Test-Path (Join-Path $package $runtimeDll))) {
+                throw "The portable package is missing $runtimeDll."
+              }
+            }
+
+            Copy-Item -Path LICENSE -Destination $package
+            Copy-Item -Path TLF_SAFE_BUILD.md -Destination $package
+
+            Write-Host 'Portable package contents:'
+            Get-ChildItem -Path $package -Recurse | Select-Object FullName, Length
+          }
+          finally {
+            Stop-Transcript
           }
 
-          Copy-Item -Path LICENSE -Destination $package
-          Copy-Item -Path TLF_SAFE_BUILD.md -Destination $package
-
-          Write-Host "Portable package contents:"
-          Get-ChildItem -Path $package -Recurse | Select-Object FullName, Length
+      - name: Upload failed package log
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: Beeftext-TLF-Safe-package-log
+          path: package-output.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload portable build
         uses: actions/upload-artifact@v5
