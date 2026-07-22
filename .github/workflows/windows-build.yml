@@ -48,7 +48,38 @@ jobs:
       - name: Build Release
         shell: pwsh
         run: |
-          cmake --build build --config Release --parallel
+          $ErrorActionPreference = 'Continue'
+          $buildOutput = @(& cmake --build build --config Release --parallel -- /nologo /verbosity:minimal 2>&1)
+          $exitCode = $LASTEXITCODE
+          $buildOutput | ForEach-Object { $_.ToString() } | Set-Content -Path build-output.log
+
+          if ($exitCode -ne 0) {
+            Write-Host '::group::Filtered compiler diagnostics'
+            $diagnostics = $buildOutput |
+              ForEach-Object { $_.ToString() } |
+              Select-String -Pattern '(?i)(fatal error|error C\d+|error LNK\d+|error MSB\d+|CMake Error|FAILED:|cannot open|not found|undefined reference)'
+
+            if ($diagnostics) {
+              $diagnostics | ForEach-Object { Write-Host $_.Line }
+            }
+            else {
+              Write-Host 'No standard error pattern matched. Showing the final 150 build lines:'
+              $buildOutput | Select-Object -Last 150 | ForEach-Object { Write-Host $_.ToString() }
+            }
+            Write-Host '::endgroup::'
+            exit $exitCode
+          }
+
+          $buildOutput | Select-Object -Last 40 | ForEach-Object { Write-Host $_.ToString() }
+
+      - name: Upload failed build log
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: Beeftext-TLF-Safe-build-log
+          path: build-output.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Assemble portable package
         shell: pwsh
