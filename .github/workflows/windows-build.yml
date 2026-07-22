@@ -1,0 +1,94 @@
+name: Windows portable build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/tlf-safe-build
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Beeftext TLF Safe
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository and submodules
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install Qt 6.8 LTS
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.8.*'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+          setup-python: true
+
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build Release
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --parallel
+
+      - name: Assemble portable package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $exe = Get-ChildItem -Path build -Recurse -File -Filter Beeftext.exe |
+            Where-Object { $_.FullName -match '[\\/]Release[\\/]' } |
+            Select-Object -First 1
+
+          if (-not $exe) {
+            Write-Host 'Build output:'
+            Get-ChildItem -Path build -Recurse -File | Select-Object FullName
+            throw 'Could not locate the Release Beeftext.exe.'
+          }
+
+          $package = Join-Path $PWD 'artifact/Beeftext-TLF-Safe'
+          New-Item -ItemType Directory -Path $package -Force | Out-Null
+          Copy-Item -Path $exe.FullName -Destination $package
+
+          $translationDir = Join-Path $exe.DirectoryName 'translations'
+          if (Test-Path $translationDir) {
+            Copy-Item -Path $translationDir -Destination $package -Recurse
+          }
+
+          & windeployqt --release --compiler-runtime --dir $package (Join-Path $package 'Beeftext.exe')
+          if ($LASTEXITCODE -ne 0) {
+            throw "windeployqt failed with exit code $LASTEXITCODE."
+          }
+
+          Copy-Item -Path LICENSE -Destination $package
+          Copy-Item -Path TLF_SAFE_BUILD.md -Destination $package
+
+          Write-Host "Portable package contents:"
+          Get-ChildItem -Path $package -Recurse | Select-Object FullName, Length
+
+      - name: Upload portable build
+        uses: actions/upload-artifact@v5
+        with:
+          name: Beeftext-TLF-Safe-windows-x64
+          path: artifact/Beeftext-TLF-Safe
+          if-no-files-found: error
+          retention-days: 14
