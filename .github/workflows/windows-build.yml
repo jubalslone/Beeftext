@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - agent/tlf-safe-build
+      - master
   pull_request:
     branches:
       - master
@@ -193,6 +193,25 @@ jobs:
 
             Copy-Item -Path LICENSE -Destination $package
             Copy-Item -Path TLF_SAFE_BUILD.md -Destination $package
+
+            $qtVersion = (& qmake -query QT_VERSION).Trim()
+            @(
+              "Repository: $env:GITHUB_REPOSITORY"
+              "Commit: $env:GITHUB_SHA"
+              "Workflow run: $env:GITHUB_RUN_ID"
+              "Qt version: $qtVersion"
+              "Built UTC: $((Get-Date).ToUniversalTime().ToString('o'))"
+            ) | Set-Content -Path (Join-Path $package 'BUILD_INFO.txt') -Encoding utf8
+
+            $checksumPath = Join-Path $package 'SHA256SUMS.txt'
+            Get-ChildItem -Path $package -Recurse -File |
+              Where-Object { $_.FullName -ne $checksumPath } |
+              Sort-Object FullName |
+              ForEach-Object {
+                $relativePath = [IO.Path]::GetRelativePath($package, $_.FullName).Replace('\', '/')
+                $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$hash  $relativePath"
+              } | Set-Content -Path $checksumPath -Encoding ascii
 
             Write-Host 'Portable package contents:'
             Get-ChildItem -Path $package -Recurse | Select-Object FullName, Length
