@@ -31,6 +31,11 @@ PrefPaneBehavior::PrefPaneBehavior(QWidget *parent)
     : PrefPane(parent)
     , prefs_(PreferencesManager::instance()) {
     ui_.setupUi(this);
+    if (constants::kRestrictedBuild) {
+        ui_.checkAutoCheckForUpdates->setVisible(false);
+        ui_.buttonCheckNow->setVisible(false);
+        ui_.labelUpdateCheckStatus->setVisible(false);
+    }
     this->updateCheckStatusTimer_.setSingleShot(true);
     connect(&updateCheckStatusTimer_, &QTimer::timeout, [&]() { ui_.labelUpdateCheckStatus->setText(QString()); });
     ui_.labelUpdateCheckStatus->setText(QString());
@@ -53,7 +58,6 @@ PrefPaneBehavior::PrefPaneBehavior(QWidget *parent)
 
 
 
-
     connect(&updateManager, &UpdateManager::startedUpdateCheck, this, &PrefPaneBehavior::onUpdateCheckStarted);
     connect(&updateManager, &UpdateManager::finishedUpdateCheck, this, &PrefPaneBehavior::onUpdateCheckFinished);
     connect(&updateManager, &UpdateManager::updateIsAvailable, this, &PrefPaneBehavior::onUpdateIsAvailable);
@@ -67,7 +71,7 @@ PrefPaneBehavior::PrefPaneBehavior(QWidget *parent)
 //****************************************************************************************************************************************************
 void PrefPaneBehavior::load() const {
     QSignalBlocker blocker(ui_.checkAutoCheckForUpdates);
-    ui_.checkAutoCheckForUpdates->setChecked(prefs_.autoCheckForUpdates());
+    ui_.checkAutoCheckForUpdates->setChecked(constants::kRestrictedBuild ? false : prefs_.autoCheckForUpdates());
     blocker = QSignalBlocker(ui_.checkAutoStart);
     ui_.checkAutoStart->setChecked(prefs_.autoStartAtLogin());
     blocker = QSignalBlocker(ui_.checkPlaySoundOnCombo);
@@ -144,7 +148,8 @@ void PrefPaneBehavior::onUpdateCheckFailed() {
 /// \param[in] checked Is the radio button checked
 //****************************************************************************************************************************************************
 void PrefPaneBehavior::onCheckAutoCheckForUpdates(bool checked) const {
-    prefs_.setAutoCheckForUpdates(checked);
+    if (!constants::kRestrictedBuild)
+        prefs_.setAutoCheckForUpdates(checked);
 }
 
 
@@ -264,5 +269,3 @@ bool PrefPaneBehavior::validateInput() {
     }
     return true;
 }
-
-
