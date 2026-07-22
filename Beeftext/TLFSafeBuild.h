@@ -1,10 +1,10 @@
 #ifndef TLF_SAFE_BUILD_H
 #define TLF_SAFE_BUILD_H
 
-namespace tlf {
+namespace constants {
 
 inline constexpr bool kRestrictedBuild = true;
 
-} // namespace tlf
+} // namespace constants
 
 #endif // TLF_SAFE_BUILD_H
