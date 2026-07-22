@@ -15,6 +15,7 @@
 #include <QtNetwork>
 #include <QtGui>
 #include <QtCore>
+#include "TLFSafeBuild.h"
 
 
 #endif // BEEFTEXT_STDAFX_H
