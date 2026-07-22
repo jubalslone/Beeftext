@@ -40,6 +40,32 @@ jobs:
           cache: true
           setup-python: true
 
+      - name: Apply XMiLib Windows CMake compatibility shim
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headerPath = 'Submodules/XMiLib/XMiLib/stdafx.h'
+          $header = Get-Content -Path $headerPath -Raw
+          $needle = '#include <QtWidgets>'
+          $replacement = @'
+          #ifdef _WIN32
+          #ifndef NOMINMAX
+          #define NOMINMAX
+          #endif
+          #include <Windows.h>
+          #endif
+
+          #include <QtWidgets>
+          '@
+
+          if (-not $header.Contains($needle)) {
+            throw "Could not locate the expected include in $headerPath."
+          }
+
+          $header = $header.Replace($needle, $replacement.Trim())
+          Set-Content -Path $headerPath -Value $header -Encoding utf8
+          Write-Host 'Added the Win32 SDK declarations expected by XMiLib Windows sources.'
+
       - name: Configure CMake
         shell: pwsh
         run: |
