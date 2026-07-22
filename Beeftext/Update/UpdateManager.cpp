@@ -48,6 +48,8 @@ UpdateManager::UpdateManager() {
 //
 //****************************************************************************************************************************************************
 void UpdateManager::checkForUpdateWitchSkipCheck() {
+    if (constants::kRestrictedBuild)
+        return;
     timer_.stop();
     startUpdateCheckWorker(true);
 }
@@ -57,6 +59,8 @@ void UpdateManager::checkForUpdateWitchSkipCheck() {
 // 
 //****************************************************************************************************************************************************
 void UpdateManager::checkForUpdateWithoutSkipCheck() {
+    if (constants::kRestrictedBuild)
+        return;
     timer_.stop();
     startUpdateCheckWorker(false);
 }
@@ -67,7 +71,7 @@ void UpdateManager::checkForUpdateWithoutSkipCheck() {
 //****************************************************************************************************************************************************
 void UpdateManager::onAutoCheckForUpdateChanged(bool enabled) {
     timer_.stop();
-    if (!enabled)
+    if (constants::kRestrictedBuild || !enabled)
         return;
 
     QDateTime const lastCheckDateTime = PreferencesManager::instance().lastUpdateCheckDateTime();
@@ -80,6 +84,8 @@ void UpdateManager::onAutoCheckForUpdateChanged(bool enabled) {
 // 
 //****************************************************************************************************************************************************
 void UpdateManager::startUpdateCheckWorker(bool verifySkippedVersion) {
+    if (constants::kRestrictedBuild)
+        return;
     emit startedUpdateCheck();
     QThread *thread = new QThread;
     UpdateCheckWorker *worker = new UpdateCheckWorker(nullptr, verifySkippedVersion ?
@@ -139,5 +145,3 @@ void UpdateManager::onWorkerNoUpdateIsAvailable() {
 void UpdateManager::onWorkerError(QString const &) {
     emit updateCheckFailed();
 }
-
-
