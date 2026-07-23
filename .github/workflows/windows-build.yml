@@ -193,6 +193,7 @@ jobs:
 
             Copy-Item -Path LICENSE -Destination $package
             Copy-Item -Path TLF_SAFE_BUILD.md -Destination $package
+            New-Item -ItemType File -Path (Join-Path $package 'Portable.bin') -Force | Out-Null
 
             $qtVersion = (& qmake -query QT_VERSION).Trim()
             @(
