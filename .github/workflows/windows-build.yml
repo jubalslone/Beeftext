@@ -40,7 +40,7 @@ jobs:
           cache: true
           setup-python: true
 
-      - name: Apply Windows CMake compatibility shims
+      - name: Apply Windows CMake and paste compatibility shims
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -81,6 +81,79 @@ jobs:
           $cmake = $cmake.Replace($consoleTarget, $guiTarget)
           Set-Content -Path $cmakePath -Value $cmake -Encoding utf8
           Write-Host 'Configured Beeftext as a Windows GUI executable.'
+
+          $utilsPath = 'Beeftext/BeeftextUtils.cpp'
+          $utils = (Get-Content -Path $utilsPath -Raw).Replace("`r`n", "`n")
+          $legacyPaste = @'
+              clipboardManager.setText(txt);
+              QList<quint16> const pressedModifiers = backupAndReleaseModifierKeys(); ///< We artificially depress the current modifier keys
+              if (PreferencesManager::instance().useShiftInsertForPasting()) {
+                  synthesizeKeyDown(VK_LSHIFT);
+                  synthesizeKeyDownAndUp(VK_INSERT);
+                  synthesizeKeyUp(VK_LSHIFT);
+              } else {
+                  synthesizeKeyDown(VK_LCONTROL);
+                  synthesizeKeyDownAndUp('V');
+                  synthesizeKeyUp(VK_LCONTROL);
+              }
+              restoreModifierKeys(pressedModifiers);
+          '@.Trim("`r", "`n")
+          $atomicPaste = @'
+              clipboardManager.setText(txt);
+          #ifdef Q_OS_WINDOWS
+              // Let Qt finish publishing the clipboard payload before another process requests it.
+              QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+          #endif
+              QList<quint16> const pressedModifiers = backupAndReleaseModifierKeys(); ///< We artificially depress the current modifier keys
+          #ifdef Q_OS_WINDOWS
+              // Send the complete paste chord as one input batch. Separate SendInput calls can allow
+              // the target application to observe the V key without the modifier on some systems.
+              bool const useShiftInsert = PreferencesManager::instance().useShiftInsertForPasting();
+              WORD const modifier = useShiftInsert ? VK_SHIFT : VK_CONTROL;
+              WORD const key = useShiftInsert ? VK_INSERT : 'V';
+              UINT constexpr eventCount = 4;
+              INPUT events[eventCount] = {};
+              auto configureKeyEvent = [](INPUT &event, WORD virtualKey, DWORD flags) {
+                  event.type = INPUT_KEYBOARD;
+                  event.ki.wVk = virtualKey;
+                  event.ki.wScan = static_cast<WORD>(MapVirtualKey(virtualKey, MAPVK_VK_TO_VSC));
+                  event.ki.dwFlags = flags;
+              };
+              configureKeyEvent(events[0], modifier, 0);
+              configureKeyEvent(events[1], key, 0);
+              configureKeyEvent(events[2], key, KEYEVENTF_KEYUP);
+              configureKeyEvent(events[3], modifier, KEYEVENTF_KEYUP);
+              UINT const sent = SendInput(eventCount, events, sizeof(INPUT));
+              if (sent != eventCount) {
+                  DWORD const error = GetLastError();
+                  INPUT releases[2] = {};
+                  configureKeyEvent(releases[0], key, KEYEVENTF_KEYUP);
+                  configureKeyEvent(releases[1], modifier, KEYEVENTF_KEYUP);
+                  SendInput(2, releases, sizeof(INPUT));
+                  restoreModifierKeys(pressedModifiers);
+                  throw xmilib::Exception(QString("Could not synthesize paste shortcut: sent %1 of %2 events (Windows error %3).")
+                                              .arg(sent).arg(eventCount).arg(error));
+              }
+          #else
+              if (PreferencesManager::instance().useShiftInsertForPasting()) {
+                  synthesizeKeyDown(VK_LSHIFT);
+                  synthesizeKeyDownAndUp(VK_INSERT);
+                  synthesizeKeyUp(VK_LSHIFT);
+              } else {
+                  synthesizeKeyDown(VK_LCONTROL);
+                  synthesizeKeyDownAndUp('V');
+                  synthesizeKeyUp(VK_LCONTROL);
+              }
+          #endif
+              restoreModifierKeys(pressedModifiers);
+          '@.Trim("`r", "`n")
+
+          if (-not $utils.Contains($legacyPaste)) {
+            throw "Could not locate the legacy paste sequence in $utilsPath."
+          }
+          $utils = $utils.Replace($legacyPaste, $atomicPaste)
+          Set-Content -Path $utilsPath -Value $utils -Encoding utf8
+          Write-Host 'Configured Windows paste as one atomic input batch.'
 
       - name: Configure CMake
         shell: pwsh
