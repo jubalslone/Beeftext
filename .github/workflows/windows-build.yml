@@ -84,20 +84,6 @@ jobs:
 
           $utilsPath = 'Beeftext/BeeftextUtils.cpp'
           $utils = (Get-Content -Path $utilsPath -Raw).Replace("`r`n", "`n")
-          $legacyPaste = @'
-              clipboardManager.setText(txt);
-              QList<quint16> const pressedModifiers = backupAndReleaseModifierKeys(); ///< We artificially depress the current modifier keys
-              if (PreferencesManager::instance().useShiftInsertForPasting()) {
-                  synthesizeKeyDown(VK_LSHIFT);
-                  synthesizeKeyDownAndUp(VK_INSERT);
-                  synthesizeKeyUp(VK_LSHIFT);
-              } else {
-                  synthesizeKeyDown(VK_LCONTROL);
-                  synthesizeKeyDownAndUp('V');
-                  synthesizeKeyUp(VK_LCONTROL);
-              }
-              restoreModifierKeys(pressedModifiers);
-          '@.Trim("`r", "`n")
           $atomicPaste = @'
               clipboardManager.setText(txt);
           #ifdef Q_OS_WINDOWS
@@ -146,12 +132,17 @@ jobs:
               }
           #endif
               restoreModifierKeys(pressedModifiers);
-          '@.Trim("`r", "`n")
+          '@.TrimEnd()
 
-          if (-not $utils.Contains($legacyPaste)) {
-            throw "Could not locate the legacy paste sequence in $utilsPath."
+          $startMarker = '    clipboardManager.setText(txt);'
+          $endMarker = '    restoreModifierKeys(pressedModifiers);'
+          $startIndex = $utils.IndexOf($startMarker)
+          $endIndex = if ($startIndex -ge 0) { $utils.IndexOf($endMarker, $startIndex) } else { -1 }
+          if (($startIndex -lt 0) -or ($endIndex -lt 0)) {
+            throw "Could not locate the legacy paste sequence boundaries in $utilsPath."
           }
-          $utils = $utils.Replace($legacyPaste, $atomicPaste)
+          $endIndex += $endMarker.Length
+          $utils = $utils.Substring(0, $startIndex) + $atomicPaste + $utils.Substring($endIndex)
           Set-Content -Path $utilsPath -Value $utils -Encoding utf8
           Write-Host 'Configured Windows paste as one atomic input batch.'
 
