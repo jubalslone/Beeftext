@@ -131,7 +131,7 @@ jobs:
 
       - name: Upload failed build or test log
         if: failure()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Beeftext-TLF-Safe-build-log
           path: |
@@ -241,7 +241,7 @@ jobs:
 
       - name: Upload failed package log
         if: failure()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Beeftext-TLF-Safe-package-log
           path: package-output.log
@@ -249,7 +249,7 @@ jobs:
           retention-days: 7
 
       - name: Upload portable build
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: Beeftext-TLF-Safe-windows-x64
           path: artifact/Beeftext-TLF-Safe
