@@ -71,7 +71,7 @@ bool isAppEnableDisableShortcut(SpShortcut const &shortcut) {
 /// \return true if the key is currently pressed.
 //****************************************************************************************************************************************************
 bool isKeyPressed(quint16 vkCode) {
-    return GetKeyState(vkCode) & 0x80;
+    return (GetAsyncKeyState(vkCode) & 0x8000) != 0;
 }
 
 

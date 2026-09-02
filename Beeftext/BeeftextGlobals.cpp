@@ -269,8 +269,11 @@ QString logFilePath() {
 /// \return The path of the backup folder
 //****************************************************************************************************************************************************
 QString backupFolderPath() {
-    PreferencesManager const &prefs = PreferencesManager::instance();
     QString defaultPath = defaultBackupFolderPath();
+    if (isInPortableMode())
+        return defaultPath;
+
+    PreferencesManager const &prefs = PreferencesManager::instance();
     if (!prefs.useCustomBackupLocation())
         return defaultPath;
     QString const customPath = PreferencesManager::instance().customBackupLocation();

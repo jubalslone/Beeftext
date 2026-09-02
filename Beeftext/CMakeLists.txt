@@ -42,7 +42,7 @@ add_custom_target(translations
    powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -command \"${TRANS_SRC_DIR} ${TRANS_DST_DIR}\" >NUL
 )
 
-add_executable(Beeftext
+add_executable(Beeftext WIN32
    AutoStart.cpp
    AutoStart.h
    BeeftextConstants.cpp
@@ -72,6 +72,8 @@ add_executable(Beeftext
    stdafx.h
    Theme.cpp
    Theme.h
+   TLFSafeBuild.cpp
+   TLFSafeBuild.h
    WaveSound.cpp
    WaveSound.h
    Backup/BackupManager.cpp
@@ -207,3 +209,13 @@ target_link_libraries(Beeftext Qt6::Widgets)
 target_link_libraries(Beeftext Qt6::Network)
 target_link_libraries(Beeftext XMiLib)
 target_link_libraries(Beeftext Winmm)
+
+if(BUILD_TESTING)
+   add_executable(TLFSafeBuildTests
+      Tests/TLFSafeBuildTests.cpp
+      TLFSafeBuild.cpp
+      TLFSafeBuild.h
+   )
+   target_link_libraries(TLFSafeBuildTests Qt6::Core)
+   add_test(NAME TLFSafeBuildTests COMMAND TLFSafeBuildTests)
+endif()

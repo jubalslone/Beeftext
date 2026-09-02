@@ -416,35 +416,51 @@ bool Combo::performSubstitution(bool triggeredByPicker) {
         qApp->thread()->msleep(300);
     }
 
-    qint32 const cursorLShift = computeCursorLeftShift(newText);
-    if (cursorLShift >= 0)
-        newText = newText.remove(kCursorVariable, Qt::CaseInsensitive);
-
     InputManager &inputManager = InputManager::instance();
     PreferencesManager const &prefs = PreferencesManager::instance();
     bool const wasKeyboardHookEnabled = inputManager.setKeyboardHookEnabled(false);
     // we disable the hook to prevent endless recursive substitution
 
     try {
-        // we erase the combo
         bool const triggersOnSpace = prefs.useAutomaticSubstitution() && prefs.comboTriggersOnSpace();
+        bool const keepFinalSpace = (!triggeredByPicker) && triggersOnSpace && prefs.keepFinalSpaceCharacter();
 
-        if (!triggeredByPicker)
-            eraseChars(qMax<qint32>(qint32(keyword_.size()) + (triggersOnSpace ? 1 : 0), 0));
+        if constexpr (constants::kRestrictedBuild) {
+            if (keepFinalSpace)
+                newText += " ";
+            tlf::RestrictedSnippet const snippet = tlf::prepareSnippet(newText);
+            if (snippet.cursorSyntaxRejected)
+                globals::debugLog().addWarning("A restricted snippet contained ambiguous or unsafe cursor syntax; the marker was inserted literally.");
 
-        // we split the snippets into fragments and render them
-        ListSpSnippetFragment fragments = splitStringIntoSnippetFragments(newText);
-        if ((!triggeredByPicker) && (triggersOnSpace && prefs.keepFinalSpaceCharacter()))
-            fragments.push_back(std::make_shared<TextSnippetFragment>(QString(" ")));
-        renderSnippetFragmentList(fragments);
+            qint32 const eraseCount = triggeredByPicker ? 0
+                : qMax<qint32>(qint32(keyword_.size()) + (triggersOnSpace ? 1 : 0), 0);
+            performRestrictedTextInput(eraseCount, snippet.text, qMax<qint32>(snippet.cursorLeftCount, 0));
+        } else {
+            qint32 const cursorLShift = computeCursorLeftShift(newText);
+            if (cursorLShift >= 0)
+                newText = newText.remove(kCursorVariable, Qt::CaseInsensitive);
 
-        // Position the cursor if needed by typing the right amount of left keystrokes.
-        if (cursorLShift > 0)
-            moveCursorLeft(cursorLShift);
+            if (!triggeredByPicker)
+                eraseChars(qMax<qint32>(qint32(keyword_.size()) + (triggersOnSpace ? 1 : 0), 0));
+
+            ListSpSnippetFragment fragments = splitStringIntoSnippetFragments(newText);
+            if (keepFinalSpace)
+                fragments.push_back(std::make_shared<TextSnippetFragment>(QString(" ")));
+            renderSnippetFragmentList(fragments);
+
+            if (cursorLShift > 0)
+                moveCursorLeft(cursorLShift);
+        }
     }
-    catch (Exception const &) {
+    catch (Exception const &exception) {
         inputManager.setKeyboardHookEnabled(wasKeyboardHookEnabled);
-        throw;
+        reportError(nullptr, QString("Combo substitution failed: %1").arg(exception.qwhat()));
+        return false;
+    }
+    catch (...) {
+        inputManager.setKeyboardHookEnabled(wasKeyboardHookEnabled);
+        reportError(nullptr, "Combo substitution failed because of an unexpected error.");
+        return false;
     }
     inputManager.setKeyboardHookEnabled(wasKeyboardHookEnabled);
 

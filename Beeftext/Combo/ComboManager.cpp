@@ -254,7 +254,11 @@ bool ComboManager::checkAndPerformEmojiSubstitution() {
     bool result = false;
     if ((!isBeeftextTheForegroundApplication()) &&
         !EmojiManager::instance().isExcludedApplication(getActiveExecutableFileName())) {
-        performTextSubstitution(qint32(keyword.size() + rightDelimiter.size() + leftDelimiter.size()), emoji->value(), -1, ETriggerSource::Keyword);
+        if (!performTextSubstitution(qint32(keyword.size() + rightDelimiter.size() + leftDelimiter.size()),
+                                     emoji->value(), -1, ETriggerSource::Keyword)) {
+            this->onComboBreakerTyped();
+            return true;
+        }
         emoji->setlastUseDateTime(QDateTime::currentDateTime());
         if (PreferencesManager::instance().playSoundOnCombo() && sound_)
             sound_->play();

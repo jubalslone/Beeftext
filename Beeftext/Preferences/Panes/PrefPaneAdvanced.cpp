@@ -31,8 +31,12 @@ PrefPaneAdvanced::PrefPaneAdvanced(QWidget *parent)
         ui_.buttonChangeCustomPowershellVersion->setVisible(false);
     }
     ui_.spinDelayBetweenKeystrokes->setRange(PreferencesManager::minDelayBetweenKeystrokesMs(), PreferencesManager::maxDelayBetweenKeystrokesMs());
-    if (isInPortableMode())
+    if (isInPortableMode()) {
         ui_.frameComboListFolder->setVisible(false);
+        ui_.checkUseCustomBackupLocation->setVisible(false);
+        ui_.editCustomBackupLocation->setVisible(false);
+        ui_.buttonChangeCustomBackupLocation->setVisible(false);
+    }
 
     // We update the GUI when the combo list is saved to properly enable/disable the 'Restore Backup' button
     connect(&ComboManager::instance(), &ComboManager::comboListWasSaved, this, &PrefPaneAdvanced::updateGui);
@@ -80,7 +84,7 @@ void PrefPaneAdvanced::load() const {
     ui_.editCustomPowerShellPath->setText(constants::kRestrictedBuild ? QString() : QDir::toNativeSeparators(prefs_.customPowershellPath()));
     ui_.checkAutoBackup->setChecked(prefs_.autoBackup());
     blocker = QSignalBlocker(ui_.checkUseCustomBackupLocation);
-    ui_.checkUseCustomBackupLocation->setChecked(prefs_.useCustomBackupLocation());
+    ui_.checkUseCustomBackupLocation->setChecked(!isInPortableMode() && prefs_.useCustomBackupLocation());
     ui_.editCustomBackupLocation->setText(QDir::toNativeSeparators(prefs_.customBackupLocation()));
 #pragma clang diagnostic pop
 
@@ -98,7 +102,7 @@ void PrefPaneAdvanced::updateGui() const {
     ui_.buttonRestoreBackup->setEnabled(BackupManager::instance().backupFileCount());
     QWidgetList widgets = { ui_.editCustomBackupLocation, ui_.buttonChangeCustomBackupLocation };
     for (QWidget *widget: widgets)
-        widget->setEnabled(prefs_.useCustomBackupLocation());
+        widget->setEnabled(!isInPortableMode() && prefs_.useCustomBackupLocation());
 }
 
 

@@ -534,7 +534,7 @@ void PreferencesManager::toJsonDocument(QJsonDocument &outDoc) const {
     object[kKeyPlaySoundOnCombo] = this->readSettings<bool>(kKeyPlaySoundOnCombo, kDefaultPlaySoundOnCombo);
     object[kKeyUseAutomaticSubstitution] = this->readSettings<bool>(kKeyUseAutomaticSubstitution, kDefaultUseAutomaticSubstitution);
     object[kKeyComboTriggersOnSpace] = this->readSettings<bool>(kKeyComboTriggersOnSpace, kDefaultComboTriggersOnSpace);
-    object[kKeyUseCustomBackupLocation] = this->readSettings<bool>(kKeyUseCustomSound, kDefaultUseCustomBackupLocation);
+    object[kKeyUseCustomBackupLocation] = this->readSettings<bool>(kKeyUseCustomBackupLocation, kDefaultUseCustomBackupLocation);
     object[kKeyUseCustomSound] = this->readSettings<bool>(kKeyUseCustomSound, kDefaultUseCustomSound);
     object[kKeyUseCustomTheme] = this->readSettings<bool>(kKeyUseCustomTheme, kDefaultUseCustomTheme);
     object[kKeyTheme] = this->readSettings<qint32>(kKeyTheme, static_cast<qint32>(kDefaultTheme));
@@ -1004,6 +1004,13 @@ bool PreferencesManager::autoBackup() const {
 /// \param[in] value The value for the preference.
 //****************************************************************************************************************************************************
 void PreferencesManager::setUseCustomBackupLocation(bool value) const {
+    if (isInPortableMode()) {
+        settings_->setValue(kKeyUseCustomBackupLocation, false);
+        if (value)
+            globals::debugLog().addWarning("Ignoring a custom backup location while running in portable mode.");
+        return;
+    }
+
     QString const oldPath = globals::backupFolderPath();
     settings_->setValue(kKeyUseCustomBackupLocation, value);
     QString const newPath = globals::backupFolderPath();
@@ -1016,6 +1023,8 @@ void PreferencesManager::setUseCustomBackupLocation(bool value) const {
 /// \return The value for the preference
 //****************************************************************************************************************************************************
 bool PreferencesManager::useCustomBackupLocation() const {
+    if (isInPortableMode())
+        return false;
     return this->readSettings<bool>(kKeyUseCustomBackupLocation, kDefaultUseCustomBackupLocation);
 }
 
@@ -1024,6 +1033,12 @@ bool PreferencesManager::useCustomBackupLocation() const {
 /// \param[in] path The path of the custom backup location.
 //****************************************************************************************************************************************************
 void PreferencesManager::setCustomBackupLocation(QString const &path) const {
+    if (isInPortableMode()) {
+        if (QDir::cleanPath(path) != QDir::cleanPath(globals::defaultBackupFolderPath()))
+            globals::debugLog().addWarning("Ignoring a custom backup path while running in portable mode.");
+        return;
+    }
+
     QString const oldPath = globals::backupFolderPath();
     settings_->setValue(kKeyCustomBackupLocation, path);
     QString const newPath = globals::backupFolderPath();
@@ -1036,6 +1051,8 @@ void PreferencesManager::setCustomBackupLocation(QString const &path) const {
 /// \return The custom backup location.
 //****************************************************************************************************************************************************
 QString PreferencesManager::customBackupLocation() const {
+    if (isInPortableMode())
+        return globals::defaultBackupFolderPath();
     return this->readSettings<QString>(kKeyCustomBackupLocation, globals::defaultBackupFolderPath());
 }
 
@@ -1389,7 +1406,7 @@ bool PreferencesManager::alreadyConvertedRichTextCombos() const {
 /// \param[in] value The value for the preference
 //****************************************************************************************************************************************************
 void PreferencesManager::setUseCustomPowershellVersion(bool value) const {
-    settings_->setValue(kKeyUseCustomPowershellVersion, value);
+    settings_->setValue(kKeyUseCustomPowershellVersion, constants::kRestrictedBuild ? false : value);
 }
 
 
@@ -1397,6 +1414,8 @@ void PreferencesManager::setUseCustomPowershellVersion(bool value) const {
 /// \return The value for the preference.
 //****************************************************************************************************************************************************
 bool PreferencesManager::useCustomPowershellVersion() const {
+    if constexpr (constants::kRestrictedBuild)
+        return false;
     return readSettings<bool>(kKeyUseCustomPowershellVersion, kDefaultUseCustomPowershellVersion);
 }
 
@@ -1405,6 +1424,10 @@ bool PreferencesManager::useCustomPowershellVersion() const {
 /// \param[in] path The path of the PowerShell executable.
 //****************************************************************************************************************************************************
 void PreferencesManager::setCustomPowershellPath(QString const &path) const {
+    if constexpr (constants::kRestrictedBuild) {
+        settings_->remove(kKeyCustomPowershellPath);
+        return;
+    }
     settings_->setValue(kKeyCustomPowershellPath, path);
 }
 
@@ -1413,6 +1436,8 @@ void PreferencesManager::setCustomPowershellPath(QString const &path) const {
 /// \return The path of the custom PowerShell executable.
 //****************************************************************************************************************************************************
 QString PreferencesManager::customPowershellPath() const {
+    if constexpr (constants::kRestrictedBuild)
+        return QString();
     return readSettings<QString>(kKeyCustomPowershellPath, QString());
 }
 
@@ -1490,5 +1515,3 @@ VersionNumber PreferencesManager::getSkipVersionNumber() const {
 void PreferencesManager::removeSkipVersionNumber() const {
     settings_->remove(kKeySkipVersionNumber);
 }
-
-

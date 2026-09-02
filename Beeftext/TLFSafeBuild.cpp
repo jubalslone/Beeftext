@@ -1,0 +1,170 @@
+/// \file
+///
+/// \brief Fail-closed parsing helpers for the TLF restricted build.
+///
+/// Licensed under the MIT License. See LICENSE file in the project root for full license information.
+
+
+#include "TLFSafeBuild.h"
+
+#include <QChar>
+#include <QRegularExpression>
+#include <limits>
+
+
+namespace {
+
+
+QString const kCursorVariable = "#{cursor}";
+
+
+QString visibleCodeUnit(quint16 value) {
+    return QStringLiteral("\\u") + QStringLiteral("%1").arg(value, 4, 16, QChar('0')).toUpper();
+}
+
+
+bool isHighSurrogate(quint16 value) {
+    return (value >= 0xd800) && (value <= 0xdbff);
+}
+
+
+bool isLowSurrogate(quint16 value) {
+    return (value >= 0xdc00) && (value <= 0xdfff);
+}
+
+
+bool isSafeCursorSuffix(QString const &suffix) {
+    if (suffix.size() > std::numeric_limits<qint32>::max())
+        return false;
+
+    // Cursor movement is implemented with Left-arrow events. Limiting the suffix to
+    // printable ASCII makes the one-event-per-character bound predictable across the
+    // Windows controls used for QA. Unicode grapheme movement is application-specific.
+    for (QChar const character: suffix) {
+        quint16 const value = character.unicode();
+        if ((value < 0x20) || (value > 0x7e))
+            return false;
+    }
+    return true;
+}
+
+
+} // anonymous namespace
+
+
+namespace tlf {
+
+
+ERestrictedVariable classifyVariable(QString const &variable) {
+    if (variable == "cursor")
+        return ERestrictedVariable::Cursor;
+    if (variable == "date")
+        return ERestrictedVariable::Date;
+    if (variable == "time")
+        return ERestrictedVariable::Time;
+    if (variable == "dateTime")
+        return ERestrictedVariable::DateTime;
+
+    if (variable.startsWith("dateTime:")) {
+        QString const payload = variable.mid(QStringLiteral("dateTime:").size());
+        if (!payload.startsWith('+') && !payload.startsWith('-'))
+            return ERestrictedVariable::CustomDateTime;
+
+        static QRegularExpression const shiftedDateTime(R"(^([+-]\d+[yMwdhmsz])+:(.*)$)");
+        return shiftedDateTime.match(payload).hasMatch() ? ERestrictedVariable::CustomDateTime
+                                                          : ERestrictedVariable::Blocked;
+    }
+    if (variable.startsWith("combo:"))
+        return ERestrictedVariable::Combo;
+    if (variable.startsWith("upper:"))
+        return ERestrictedVariable::Upper;
+    if (variable.startsWith("lower:"))
+        return ERestrictedVariable::Lower;
+    if (variable.startsWith("trim:"))
+        return ERestrictedVariable::Trim;
+    if (variable.startsWith("input:"))
+        return ERestrictedVariable::Input;
+    return ERestrictedVariable::Blocked;
+}
+
+
+QString sanitizeText(QString const &text) {
+    QString result;
+    result.reserve(text.size());
+
+    for (qsizetype index = 0; index < text.size(); ++index) {
+        QChar const character = text[index];
+        quint16 const value = character.unicode();
+
+        if (value == '\r') {
+            if (((index + 1) < text.size()) && (text[index + 1] == QChar::LineFeed))
+                ++index;
+            result += QStringLiteral("\\n");
+            continue;
+        }
+        if (value == '\n') {
+            result += QStringLiteral("\\n");
+            continue;
+        }
+        if (value == '\t') {
+            result += QStringLiteral("\\t");
+            continue;
+        }
+
+        // Unicode line and paragraph separators can also be interpreted as submission
+        // controls, depending on the target application.
+        if ((value == 0x2028) || (value == 0x2029)) {
+            result += visibleCodeUnit(value);
+            continue;
+        }
+
+        if (isHighSurrogate(value)) {
+            if (((index + 1) < text.size()) && isLowSurrogate(text[index + 1].unicode())) {
+                result += character;
+                result += text[++index];
+            } else {
+                result += visibleCodeUnit(value);
+            }
+            continue;
+        }
+        if (isLowSurrogate(value)) {
+            result += visibleCodeUnit(value);
+            continue;
+        }
+
+        if (character.category() == QChar::Other_Control) {
+            result += visibleCodeUnit(value);
+            continue;
+        }
+        result += character;
+    }
+    return result;
+}
+
+
+RestrictedSnippet prepareSnippet(QString const &text) {
+    RestrictedSnippet result;
+    result.text = sanitizeText(text);
+
+    qsizetype const markerIndex = result.text.indexOf(kCursorVariable);
+    if (markerIndex < 0)
+        return result;
+
+    if (result.text.indexOf(kCursorVariable, markerIndex + kCursorVariable.size()) >= 0) {
+        result.cursorSyntaxRejected = true;
+        return result;
+    }
+
+    QString const suffix = result.text.mid(markerIndex + kCursorVariable.size());
+    if (!isSafeCursorSuffix(suffix)) {
+        result.cursorSyntaxRejected = true;
+        return result;
+    }
+
+    result.text.remove(markerIndex, kCursorVariable.size());
+    result.cursorLeftCount = static_cast<qint32>(suffix.size());
+    return result;
+}
+
+
+} // namespace tlf

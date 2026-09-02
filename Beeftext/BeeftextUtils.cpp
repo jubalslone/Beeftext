@@ -20,6 +20,7 @@
 #include <Psapi.h>
 #include <XMiLib/SystemUtils.h>
 #include <XMiLib/Exception.h>
+#include <vector>
 
 
 using namespace xmilib;
@@ -33,6 +34,8 @@ QString const kPortableAppsModeBeaconFileName = "PortableApps.bin"; ///< The nam
 QList<quint16> const modifierKeys = { VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU, VK_LSHIFT, VK_RSHIFT, VK_LWIN,
                                       VK_RWIN }; ///< The modifier keys
 QChar constexpr kObjectReplacementChar(0xfffc); ///< The unicode object replacement character.
+quint64 constexpr kMaxRestrictedInputEventCount = 200000;
+qint64 constexpr kModifierReleaseTimeoutMs = 1000;
 
 
 
@@ -69,7 +72,7 @@ bool isInPortableModeInternal() {
 QList<quint16> backupAndReleaseModifierKeys() {
     QList<quint16> result;
     for (quint16 const key: modifierKeys)
-        if (GetKeyState(key) < 0) {
+        if (GetAsyncKeyState(key) < 0) {
             result.append(key);
             synthesizeKeyUp(key);
         }
@@ -95,6 +98,78 @@ void waitBetweenKeystrokes() {
     qint32 const delayMs = PreferencesManager::instance().delayBetweenKeystrokesMs();
     if (delayMs > 0)
         qApp->thread()->msleep(static_cast<quint32>(delayMs));
+}
+
+
+bool isModifierPressed() {
+    for (quint16 const key: modifierKeys)
+        if (GetAsyncKeyState(key) < 0)
+            return true;
+    return false;
+}
+
+
+void waitForModifierRelease() {
+    QElapsedTimer timer;
+    timer.start();
+    while (isModifierPressed() && (timer.elapsed() < kModifierReleaseTimeoutMs))
+        QThread::msleep(5);
+    if (isModifierPressed())
+        throw Exception("Could not insert restricted text while a modifier key remained pressed.");
+}
+
+
+bool isExtendedKey(WORD virtualKey) {
+    switch (virtualKey) {
+    case VK_RCONTROL:
+    case VK_RMENU:
+    case VK_LWIN:
+    case VK_RWIN:
+    case VK_INSERT:
+    case VK_DELETE:
+    case VK_HOME:
+    case VK_END:
+    case VK_PRIOR:
+    case VK_NEXT:
+    case VK_LEFT:
+    case VK_RIGHT:
+    case VK_UP:
+    case VK_DOWN:
+        return true;
+    default:
+        return false;
+    }
+}
+
+
+void appendVirtualKeyEvent(std::vector<INPUT> &events, WORD virtualKey, bool pressed) {
+    INPUT event = {};
+    event.type = INPUT_KEYBOARD;
+    event.ki.wVk = virtualKey;
+    event.ki.wScan = static_cast<WORD>(MapVirtualKey(virtualKey, MAPVK_VK_TO_VSC));
+    event.ki.dwFlags = pressed ? 0 : KEYEVENTF_KEYUP;
+    if (isExtendedKey(virtualKey))
+        event.ki.dwFlags |= KEYEVENTF_EXTENDEDKEY;
+    events.push_back(event);
+}
+
+
+void appendVirtualKeyPress(std::vector<INPUT> &events, WORD virtualKey) {
+    appendVirtualKeyEvent(events, virtualKey, true);
+    appendVirtualKeyEvent(events, virtualKey, false);
+}
+
+
+void appendUnicodeCodeUnit(std::vector<INPUT> &events, QChar character) {
+    INPUT keyDown = {};
+    keyDown.type = INPUT_KEYBOARD;
+    keyDown.ki.wScan = character.unicode();
+    keyDown.ki.dwFlags = KEYEVENTF_UNICODE;
+
+    INPUT keyUp = keyDown;
+    keyUp.ki.dwFlags |= KEYEVENTF_KEYUP;
+    events.push_back(keyDown);
+    events.push_back(keyUp);
 }
 
 
@@ -273,6 +348,11 @@ QString ensureStringHasCRLFLineEndings(QString const &str) {
 /// \param[in] text The text
 //****************************************************************************************************************************************************
 void insertText(QString const &text) {
+    if constexpr (constants::kRestrictedBuild) {
+        performRestrictedTextInput(0, text, 0);
+        return;
+    }
+
     QList<quint16> pressedModifiers;
     if (!globals::sensitiveApplications().filter(getActiveExecutableFileName()))
         insertTextByPasting(text);
@@ -334,13 +414,60 @@ void moveCursorLeft(qint32 count) {
 
 
 //****************************************************************************************************************************************************
+/// Perform deletion, printable Unicode insertion, and bounded cursor movement as one
+/// serial SendInput batch. Restricted text is sanitized again here so every caller,
+/// including emoji insertion, receives the same fail-closed behavior.
+//****************************************************************************************************************************************************
+void performRestrictedTextInput(qint32 eraseCount, QString const &text, qint32 cursorLeftCount) {
+    waitForModifierRelease();
+
+    qint32 const safeEraseCount = qMax<qint32>(eraseCount, 0);
+    qint32 const safeCursorLeftCount = qMax<qint32>(cursorLeftCount, 0);
+    QString const safeText = tlf::sanitizeText(text);
+    quint64 const eventCount64 = 2ULL * (static_cast<quint64>(safeEraseCount)
+        + static_cast<quint64>(safeText.size()) + static_cast<quint64>(safeCursorLeftCount));
+    if (eventCount64 > kMaxRestrictedInputEventCount)
+        throw Exception("The restricted snippet is too long to insert safely.");
+
+    std::vector<INPUT> events;
+    events.reserve(static_cast<size_t>(eventCount64));
+    for (qint32 index = 0; index < safeEraseCount; ++index)
+        appendVirtualKeyPress(events, VK_BACK);
+    for (QChar const character: safeText)
+        appendUnicodeCodeUnit(events, character);
+    for (qint32 index = 0; index < safeCursorLeftCount; ++index)
+        appendVirtualKeyPress(events, VK_LEFT);
+
+    if (events.empty())
+        return;
+
+    UINT const eventCount = static_cast<UINT>(events.size());
+    SetLastError(ERROR_SUCCESS);
+    UINT const sent = SendInput(eventCount, events.data(), sizeof(INPUT));
+    if (sent == eventCount)
+        return;
+
+    DWORD const error = GetLastError();
+    if ((sent > 0) && ((sent % 2) != 0)) {
+        // Every event pair is key-down/key-up. If Windows accepted an odd prefix,
+        // release the final key so a partial failure cannot leave it logically held.
+        INPUT release = events[sent - 1];
+        release.ki.dwFlags |= KEYEVENTF_KEYUP;
+        SendInput(1, &release, sizeof(INPUT));
+    }
+    throw Exception(QString("Could not insert restricted snippet: sent %1 of %2 events (Windows error %3; elevated targets may block input).")
+                        .arg(sent).arg(eventCount).arg(error));
+}
+
+
+//****************************************************************************************************************************************************
 /// \param[in] charCount The number of characters to substitute.
 /// \param[in] newText The new text.
 /// \param[in] cursorPos The position of the cursor in the new text. The value is -1 if the cursor does not need
 /// \param[in] source The source that triggered the combo
 /// repositionning.
 //****************************************************************************************************************************************************
-void performTextSubstitution(qint32 charCount, QString const &newText, qint32 cursorPos, ETriggerSource source) {
+bool performTextSubstitution(qint32 charCount, QString const &newText, qint32 cursorPos, ETriggerSource source) {
     InputManager &inputManager = InputManager::instance();
     PreferencesManager const &prefs = PreferencesManager::instance();
     bool const wasKeyboardHookEnabled = inputManager.setKeyboardHookEnabled(false);
@@ -352,18 +479,33 @@ void performTextSubstitution(qint32 charCount, QString const &newText, qint32 cu
         bool const triggersOnSpace = prefs.useAutomaticSubstitution() && prefs.comboTriggersOnSpace();
         QString const text = newText + (triggersOnSpace && prefs.keepFinalSpaceCharacter() && (!triggeredByPicker)
                                         ? " " : QString());
-        if (!triggeredByPicker)
-            eraseChars(qMax<qint32>(charCount + (triggersOnSpace ? 1 : 0), 0));
-        insertText(text);
-        // position the cursor if needed by typing the right amount of left key strokes
-        if (cursorPos >= 0)
-            moveCursorLeft(qMax<qint32>(0, printableCharacterCount(text) - cursorPos));
+        if constexpr (constants::kRestrictedBuild) {
+            qint32 const eraseCount = triggeredByPicker ? 0
+                : qMax<qint32>(charCount + (triggersOnSpace ? 1 : 0), 0);
+            qint32 const cursorLeftCount = cursorPos < 0 ? 0
+                : qMax<qint32>(0, printableCharacterCount(tlf::sanitizeText(text)) - cursorPos);
+            performRestrictedTextInput(eraseCount, text, cursorLeftCount);
+        } else {
+            if (!triggeredByPicker)
+                eraseChars(qMax<qint32>(charCount + (triggersOnSpace ? 1 : 0), 0));
+            insertText(text);
+            // position the cursor if needed by typing the right amount of left key strokes
+            if (cursorPos >= 0)
+                moveCursorLeft(qMax<qint32>(0, printableCharacterCount(text) - cursorPos));
+        }
     }
-    catch (Exception const &) {
+    catch (Exception const &exception) {
         inputManager.setKeyboardHookEnabled(wasKeyboardHookEnabled);
-        throw;
+        reportError(nullptr, QString("Text substitution failed: %1").arg(exception.qwhat()));
+        return false;
+    }
+    catch (...) {
+        inputManager.setKeyboardHookEnabled(wasKeyboardHookEnabled);
+        reportError(nullptr, "Text substitution failed because of an unexpected error.");
+        return false;
     }
     inputManager.setKeyboardHookEnabled(wasKeyboardHookEnabled);
+    return true;
 }
 
 

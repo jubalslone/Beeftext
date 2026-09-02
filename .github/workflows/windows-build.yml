@@ -18,17 +18,45 @@ concurrency:
 
 jobs:
   build:
-    name: Build Beeftext TLF Safe
+    name: Build and test Beeftext TLF Safe
     runs-on: windows-2022
     timeout-minutes: 30
 
     steps:
-      - name: Check out repository and submodules
-        uses: actions/checkout@v6
+      - name: Check out exact source commit and submodules
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Verify source identity and cleanliness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = '${{ github.event.pull_request.head.sha || github.sha }}'
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $expected) {
+            throw "Checked out $actual, expected $expected."
+          }
+
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The checked-out source tree has unstaged tracked changes.'
+          }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The checked-out source tree has staged changes.'
+          }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) {
+            throw 'A submodule has unstaged tracked changes.'
+          }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The checked-out source tree or a submodule is dirty.'
+          }
 
       - name: Install Qt 6.8 LTS
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
@@ -40,116 +68,10 @@ jobs:
           cache: true
           setup-python: true
 
-      - name: Apply Windows CMake and paste compatibility shims
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $headerPaths = @(
-            'Submodules/XMiLib/XMiLib/stdafx.h',
-            'Beeftext/stdafx.h'
-          )
-          $needle = '#include <QtWidgets>'
-          $replacement = @'
-          #ifdef _WIN32
-          #ifndef NOMINMAX
-          #define NOMINMAX
-          #endif
-          #include <Windows.h>
-          #endif
-
-          #include <QtWidgets>
-          '@
-
-          foreach ($headerPath in $headerPaths) {
-            $header = Get-Content -Path $headerPath -Raw
-            if (-not $header.Contains($needle)) {
-              throw "Could not locate the expected include in $headerPath."
-            }
-
-            $header = $header.Replace($needle, $replacement.Trim())
-            Set-Content -Path $headerPath -Value $header -Encoding utf8
-            Write-Host "Added Win32 SDK declarations to $headerPath."
-          }
-
-          $cmakePath = 'Beeftext/CMakeLists.txt'
-          $cmake = Get-Content -Path $cmakePath -Raw
-          $consoleTarget = 'add_executable(Beeftext'
-          $guiTarget = 'add_executable(Beeftext WIN32'
-          if (-not $cmake.Contains($consoleTarget)) {
-            throw "Could not locate the Beeftext executable declaration in $cmakePath."
-          }
-          $cmake = $cmake.Replace($consoleTarget, $guiTarget)
-          Set-Content -Path $cmakePath -Value $cmake -Encoding utf8
-          Write-Host 'Configured Beeftext as a Windows GUI executable.'
-
-          $utilsPath = 'Beeftext/BeeftextUtils.cpp'
-          $utils = (Get-Content -Path $utilsPath -Raw).Replace("`r`n", "`n")
-          $atomicPaste = @'
-              clipboardManager.setText(txt);
-          #ifdef Q_OS_WINDOWS
-              // Let Qt finish publishing the clipboard payload before another process requests it.
-              QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-          #endif
-              QList<quint16> const pressedModifiers = backupAndReleaseModifierKeys(); ///< We artificially depress the current modifier keys
-          #ifdef Q_OS_WINDOWS
-              // Send the complete paste chord as one input batch. Separate SendInput calls can allow
-              // the target application to observe the V key without the modifier on some systems.
-              bool const useShiftInsert = PreferencesManager::instance().useShiftInsertForPasting();
-              WORD const modifier = useShiftInsert ? VK_SHIFT : VK_CONTROL;
-              WORD const key = useShiftInsert ? VK_INSERT : 'V';
-              UINT constexpr eventCount = 4;
-              INPUT events[eventCount] = {};
-              auto configureKeyEvent = [](INPUT &event, WORD virtualKey, DWORD flags) {
-                  event.type = INPUT_KEYBOARD;
-                  event.ki.wVk = virtualKey;
-                  event.ki.wScan = static_cast<WORD>(MapVirtualKey(virtualKey, MAPVK_VK_TO_VSC));
-                  event.ki.dwFlags = flags;
-              };
-              configureKeyEvent(events[0], modifier, 0);
-              configureKeyEvent(events[1], key, 0);
-              configureKeyEvent(events[2], key, KEYEVENTF_KEYUP);
-              configureKeyEvent(events[3], modifier, KEYEVENTF_KEYUP);
-              UINT const sent = SendInput(eventCount, events, sizeof(INPUT));
-              if (sent != eventCount) {
-                  DWORD const error = GetLastError();
-                  INPUT releases[2] = {};
-                  configureKeyEvent(releases[0], key, KEYEVENTF_KEYUP);
-                  configureKeyEvent(releases[1], modifier, KEYEVENTF_KEYUP);
-                  SendInput(2, releases, sizeof(INPUT));
-                  restoreModifierKeys(pressedModifiers);
-                  throw xmilib::Exception(QString("Could not synthesize paste shortcut: sent %1 of %2 events (Windows error %3).")
-                                              .arg(sent).arg(eventCount).arg(error));
-              }
-          #else
-              if (PreferencesManager::instance().useShiftInsertForPasting()) {
-                  synthesizeKeyDown(VK_LSHIFT);
-                  synthesizeKeyDownAndUp(VK_INSERT);
-                  synthesizeKeyUp(VK_LSHIFT);
-              } else {
-                  synthesizeKeyDown(VK_LCONTROL);
-                  synthesizeKeyDownAndUp('V');
-                  synthesizeKeyUp(VK_LCONTROL);
-              }
-          #endif
-              restoreModifierKeys(pressedModifiers);
-          '@.TrimEnd()
-
-          $startMarker = '    clipboardManager.setText(txt);'
-          $endMarker = '    restoreModifierKeys(pressedModifiers);'
-          $startIndex = $utils.IndexOf($startMarker)
-          $endIndex = if ($startIndex -ge 0) { $utils.IndexOf($endMarker, $startIndex) } else { -1 }
-          if (($startIndex -lt 0) -or ($endIndex -lt 0)) {
-            throw "Could not locate the legacy paste sequence boundaries in $utilsPath."
-          }
-          $endIndex += $endMarker.Length
-          $utils = $utils.Substring(0, $startIndex) + $atomicPaste + $utils.Substring($endIndex)
-          Set-Content -Path $utilsPath -Value $utils -Encoding utf8
-          Write-Host 'Configured Windows paste as one atomic input batch.'
-
       - name: Configure CMake
         shell: pwsh
         run: |
-          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
 
       - name: Build Release
         shell: pwsh
@@ -178,12 +100,43 @@ jobs:
 
           $buildOutput | Select-Object -Last 40 | ForEach-Object { Write-Host $_.ToString() }
 
-      - name: Upload failed build log
+      - name: Run restricted-build tests
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C Release --output-on-failure 2>&1 | Tee-Object -FilePath test-output.log
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Verify build did not rewrite tracked source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The build modified the source worktree.'
+          }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The build staged source changes.'
+          }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The build modified a submodule worktree.'
+          }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The build modified tracked source files.'
+          }
+
+      - name: Upload failed build or test log
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: Beeftext-TLF-Safe-build-log
-          path: build-output.log
+          path: |
+            build-output.log
+            test-output.log
           if-no-files-found: warn
           retention-days: 7
 
@@ -260,9 +213,10 @@ jobs:
             New-Item -ItemType File -Path (Join-Path $package 'Portable.bin') -Force | Out-Null
 
             $qtVersion = (& qmake -query QT_VERSION).Trim()
+            $sourceCommit = (git rev-parse HEAD).Trim()
             @(
               "Repository: $env:GITHUB_REPOSITORY"
-              "Commit: $env:GITHUB_SHA"
+              "Source commit: $sourceCommit"
               "Workflow run: $env:GITHUB_RUN_ID"
               "Qt version: $qtVersion"
               "Built UTC: $((Get-Date).ToUniversalTime().ToString('o'))"
@@ -287,7 +241,7 @@ jobs:
 
       - name: Upload failed package log
         if: failure()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: Beeftext-TLF-Safe-package-log
           path: package-output.log
@@ -295,7 +249,7 @@ jobs:
           retention-days: 7
 
       - name: Upload portable build
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: Beeftext-TLF-Safe-windows-x64
           path: artifact/Beeftext-TLF-Safe

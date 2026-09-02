@@ -85,7 +85,8 @@ int main(int argc, char *argv[]) {
         debugLog.addInfo(QString("%1 started.").arg(constants::kApplicationName));
         debugLog.addInfo(QString("Build info: %1").arg(globals::getBuildInfo()));
         applyAutostartParameters();
-        removeFileMarkedForDeletion();
+        if constexpr (!constants::kRestrictedBuild)
+            removeFileMarkedForDeletion();
 
         // if necessary warn about deprecated rich text support and offer an exit option.
         if (prefs.alreadyLaunched() && (!prefs.alreadyConvertedRichTextCombos()) &&

@@ -14,6 +14,7 @@
 #include "BeeftextConstants.h"
 #include <XMiLib/RandomNumberGenerator.h>
 #include <XMiLib/Exception.h>
+#include <limits>
 
 
 namespace {
@@ -112,6 +113,16 @@ QStringList splitTimeShiftString(QString const &shiftStr) {
 }
 
 
+bool checkedScale(qint64 value, qint64 factor, qint64 &result) {
+    Q_ASSERT(factor > 0);
+    if ((value > (std::numeric_limits<qint64>::max() / factor))
+        || (value < (std::numeric_limits<qint64>::min() / factor)))
+        return false;
+    result = value * factor;
+    return true;
+}
+
+
 //****************************************************************************************************************************************************
 /// \brief Returns the current date shifted according to the instructions in the shift string.
 /// \param[in] shiftStr The string describing the timeshift (as defined in the dateTime: variable documentation.
@@ -124,31 +135,42 @@ QDateTime shiftedDateTime(QString const &shiftStr) {
     for (QString const &shift: shifts) {
         QRegularExpressionMatch const match = QRegularExpression(R"(([+-])(\d+)([yMwdhmsz]))").match(shift);
         if (!match.hasMatch())
-            continue;
+            return QDateTime();
         bool ok = false;
         qint64 value = match.captured(2).toLongLong(&ok);
         if (!ok)
-            continue;
+            return QDateTime();
         if (match.captured(1) == "-")
             value = -value;
+        qint64 scaledValue = 0;
         switch (match.captured(3)[0].toLatin1()) {
         case 'y':
+            if ((value < std::numeric_limits<qint32>::min()) || (value > std::numeric_limits<qint32>::max()))
+                return QDateTime();
             result = result.addYears(static_cast<qint32>(value));
             break;
         case 'M':
+            if ((value < std::numeric_limits<qint32>::min()) || (value > std::numeric_limits<qint32>::max()))
+                return QDateTime();
             result = result.addMonths(static_cast<qint32>(value));
             break;
         case 'w':
-            result = result.addDays(value * 7);
+            if (!checkedScale(value, 7, scaledValue))
+                return QDateTime();
+            result = result.addDays(scaledValue);
             break;
         case 'd':
             result = result.addDays(value);
             break;
         case 'h':
-            result = result.addSecs(3600 * value);
+            if (!checkedScale(value, 3600, scaledValue))
+                return QDateTime();
+            result = result.addSecs(scaledValue);
             break;
         case 'm':
-            result = result.addSecs(60 * value);
+            if (!checkedScale(value, 60, scaledValue))
+                return QDateTime();
+            result = result.addSecs(scaledValue);
             break;
         case 's':
             result = result.addSecs(value);
@@ -159,6 +181,8 @@ QDateTime shiftedDateTime(QString const &shiftStr) {
         default:
             break;
         }
+        if (!result.isValid())
+            return QDateTime();
     }
     return result;
 }
@@ -170,16 +194,13 @@ QDateTime shiftedDateTime(QString const &shiftStr) {
 /// \return the result of the evaluation.
 //****************************************************************************************************************************************************
 QString evaluateDateTimeVariable(QString const &variable) {
-    QString const formatString = resolveEscapingInVariableParameter(variable.right(variable.size()
-                                                                                   - kCustomDateTimeVariable.size()));
-
     QRegularExpression const regExp(R"(^dateTime(:(([+-]\d+[yMwdhmsz])+))?:(.*)$)");
     QRegularExpressionMatch const match = regExp.match(variable);
     if (!match.hasMatch())
         return QString();
     QDateTime const dateTime = match.captured(1).isEmpty() ? QDateTime::currentDateTime() :
                                shiftedDateTime(match.captured(2));
-    QString formatStr = match.captured(4);
+    QString formatStr = resolveEscapingInVariableParameter(match.captured(4));
     if (formatStr.isEmpty())
         return QLocale::system().toString(dateTime);
 
@@ -350,13 +371,41 @@ QString evaluateVariable(QString const &variable, QSet<QString> const &forbidden
     outCancelled = false;
     QLocale const systemLocale = QLocale::system();
 
-    // The restricted build is intended for ordinary text expansion only. Keep blocked
-    // variables visible in the expanded text so imported or legacy combos fail safely
-    // and can be corrected, rather than silently executing or exposing user data.
-    if (constants::kRestrictedBuild && ((variable == "clipboard") || (variable == "discordemoji")
-        || variable.startsWith(kEnvVarVariable) || variable.startsWith(kPowershellVariable))) {
-        globals::debugLog().addWarning("Blocked a restricted combo variable.");
-        return QString("#{%1}").arg(variable);
+    if constexpr (constants::kRestrictedBuild) {
+        QString const literal = QString("#{%1}").arg(variable);
+        switch (tlf::classifyVariable(variable)) {
+        case tlf::ERestrictedVariable::Cursor:
+            return literal; // Resolved once, after the complete snippet has been evaluated.
+        case tlf::ERestrictedVariable::Date:
+            return systemLocale.toString(QDate::currentDate());
+        case tlf::ERestrictedVariable::Time:
+            return systemLocale.toString(QTime::currentTime());
+        case tlf::ERestrictedVariable::DateTime:
+            return systemLocale.toString(QDateTime::currentDateTime());
+        case tlf::ERestrictedVariable::CustomDateTime:
+        {
+            QString const value = evaluateDateTimeVariable(variable);
+            return value.isEmpty() ? literal : value;
+        }
+        case tlf::ERestrictedVariable::Combo:
+            return evaluateComboVariable(variable, ECaseChange::NoChange, forbiddenSubCombos,
+                                         knownInputVariables, outCancelled);
+        case tlf::ERestrictedVariable::Upper:
+            return evaluateComboVariable(variable, ECaseChange::ToUpper, forbiddenSubCombos,
+                                         knownInputVariables, outCancelled);
+        case tlf::ERestrictedVariable::Lower:
+            return evaluateComboVariable(variable, ECaseChange::ToLower, forbiddenSubCombos,
+                                         knownInputVariables, outCancelled);
+        case tlf::ERestrictedVariable::Trim:
+            return evaluateComboVariable(variable, ECaseChange::NoChange, forbiddenSubCombos,
+                                         knownInputVariables, outCancelled).trimmed();
+        case tlf::ERestrictedVariable::Input:
+            return evaluateInputVariable(variable, knownInputVariables, outCancelled);
+        case tlf::ERestrictedVariable::Blocked:
+        default:
+            globals::debugLog().addWarning("Blocked a restricted combo variable.");
+            return literal;
+        }
     }
 
     if (variable == "clipboard")
