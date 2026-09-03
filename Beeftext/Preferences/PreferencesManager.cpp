@@ -19,6 +19,7 @@
 #include "BeeftextUtils.h"
 #include "BeeftextGlobals.h"
 #include "BeeftextConstants.h"
+#include "TLFSafeBuild.h"
 #include <XMiLib/Exception.h>
 
 
@@ -196,6 +197,7 @@ SpShortcut readShortcutFromPreferences(QSettings const &settings, QString const 
 void PreferencesManager::Cache::init() {
     // Cache often accessed values
     useAutomaticSubstitution = ::readSettings<bool>(settings_, kKeyUseAutomaticSubstitution, kDefaultUseAutomaticSubstitution);
+    allowRealLineBreaksInSnippets = tlf::readAllowRealLineBreaksInSnippets(settings_);
     comboTriggersOnSpace = ::readSettings<bool>(settings_, kKeyComboTriggersOnSpace, kDefaultComboTriggersOnSpace);
     keepFinalSpaceCharacter = ::readSettings<bool>(settings_, kKeyKeepFinalSpaceCharacter, kDefaultKeepFinalSpaceCharacter);
     cacheComboTriggerShortcut();
@@ -382,6 +384,7 @@ void PreferencesManager::reset() {
     this->setLocale(I18nManager::instance().validateLocale(QLocale::system()));
     this->setPlaySoundOnCombo(kDefaultPlaySoundOnCombo);
     this->setUseAutomaticSubstitution(kDefaultUseAutomaticSubstitution);
+    this->setAllowRealLineBreaksInSnippets(tlf::kDefaultAllowRealLineBreaksInSnippets);
     this->setComboTriggersOnSpace(kDefaultComboTriggersOnSpace);
     this->setKeepFinalSpaceCharacter(kDefaultKeepFinalSpaceCharacter);
     this->setUseCustomBackupLocation(kDefaultUseCustomBackupLocation);
@@ -533,6 +536,7 @@ void PreferencesManager::toJsonDocument(QJsonDocument &outDoc) const {
     object[kKeySplitterState] = QString::fromLocal8Bit(this->readSettings<QByteArray>(kKeySplitterState, QByteArray()).toHex());
     object[kKeyPlaySoundOnCombo] = this->readSettings<bool>(kKeyPlaySoundOnCombo, kDefaultPlaySoundOnCombo);
     object[kKeyUseAutomaticSubstitution] = this->readSettings<bool>(kKeyUseAutomaticSubstitution, kDefaultUseAutomaticSubstitution);
+    tlf::exportAllowRealLineBreaksInSnippets(*settings_, object);
     object[kKeyComboTriggersOnSpace] = this->readSettings<bool>(kKeyComboTriggersOnSpace, kDefaultComboTriggersOnSpace);
     object[kKeyUseCustomBackupLocation] = this->readSettings<bool>(kKeyUseCustomBackupLocation, kDefaultUseCustomBackupLocation);
     object[kKeyUseCustomSound] = this->readSettings<bool>(kKeyUseCustomSound, kDefaultUseCustomSound);
@@ -587,6 +591,7 @@ void PreferencesManager::fromJsonDocument(QJsonDocument const &doc) const {
     settings_->setValue(kKeyGeometry, QByteArray::fromHex(objectValue<QString>(object, kKeySplitterState).toLocal8Bit()));
     settings_->setValue(kKeyPlaySoundOnCombo, objectValue<bool>(object, kKeyPlaySoundOnCombo));
     settings_->setValue(kKeyUseAutomaticSubstitution, objectValue<bool>(object, kKeyUseAutomaticSubstitution));
+    tlf::importAllowRealLineBreaksInSnippets(object, *settings_);
     settings_->setValue(kKeyComboTriggersOnSpace, objectValue<bool>(object, kKeyComboTriggersOnSpace));
     this->setUseCustomBackupLocation(objectValue<bool>(object, kKeyUseCustomBackupLocation)); // we call the function because it has side effects
     settings_->setValue(kKeyUseCustomSound, objectValue<bool>(object, kKeyUseCustomSound));
@@ -845,6 +850,23 @@ void PreferencesManager::setUseAutomaticSubstitution(bool value) const {
 //****************************************************************************************************************************************************
 bool PreferencesManager::useAutomaticSubstitution() const {
     return cache_->useAutomaticSubstitution;
+}
+
+
+//****************************************************************************************************************************************************
+/// \param[in] value Whether text line breaks should be inserted as real line breaks.
+//****************************************************************************************************************************************************
+void PreferencesManager::setAllowRealLineBreaksInSnippets(bool value) const {
+    cache_->allowRealLineBreaksInSnippets = value;
+    tlf::writeAllowRealLineBreaksInSnippets(*settings_, value);
+}
+
+
+//****************************************************************************************************************************************************
+/// \return true when restricted snippets may insert real line breaks.
+//****************************************************************************************************************************************************
+bool PreferencesManager::allowRealLineBreaksInSnippets() const {
+    return cache_->allowRealLineBreaksInSnippets;
 }
 
 

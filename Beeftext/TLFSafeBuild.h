@@ -3,6 +3,9 @@
 
 #include <QString>
 
+class QJsonObject;
+class QSettings;
+
 namespace constants {
 
 inline constexpr bool kRestrictedBuild = true;
@@ -11,6 +14,10 @@ inline constexpr bool kRestrictedBuild = true;
 
 
 namespace tlf {
+
+
+inline constexpr char kAllowRealLineBreaksInSnippetsSettingKey[] = "AllowRealLineBreaksInSnippets";
+inline constexpr bool kDefaultAllowRealLineBreaksInSnippets = false;
 
 
 enum class ERestrictedVariable {
@@ -36,8 +43,12 @@ struct RestrictedSnippet {
 
 
 ERestrictedVariable classifyVariable(QString const &variable);
-QString sanitizeText(QString const &text);
-RestrictedSnippet prepareSnippet(QString const &text);
+QString sanitizeText(QString const &text, bool allowRealLineBreaks = false);
+RestrictedSnippet prepareSnippet(QString const &text, bool allowRealLineBreaks = false);
+bool readAllowRealLineBreaksInSnippets(QSettings const &settings);
+void writeAllowRealLineBreaksInSnippets(QSettings &settings, bool value);
+void exportAllowRealLineBreaksInSnippets(QSettings const &settings, QJsonObject &object);
+void importAllowRealLineBreaksInSnippets(QJsonObject const &object, QSettings &settings);
 
 
 } // namespace tlf

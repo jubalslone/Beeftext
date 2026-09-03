@@ -349,7 +349,8 @@ QString ensureStringHasCRLFLineEndings(QString const &str) {
 //****************************************************************************************************************************************************
 void insertText(QString const &text) {
     if constexpr (constants::kRestrictedBuild) {
-        performRestrictedTextInput(0, text, 0);
+        performRestrictedTextInput(0, text, 0,
+            PreferencesManager::instance().allowRealLineBreaksInSnippets());
         return;
     }
 
@@ -414,16 +415,19 @@ void moveCursorLeft(qint32 count) {
 
 
 //****************************************************************************************************************************************************
-/// Perform deletion, printable Unicode insertion, and bounded cursor movement as one
-/// serial SendInput batch. Restricted text is sanitized again here so every caller,
-/// including emoji insertion, receives the same fail-closed behavior.
+/// Perform deletion, text insertion, and bounded cursor movement as one serial
+/// SendInput batch. Restricted text is sanitized again here so every caller,
+/// including emoji insertion, receives the same fail-closed behavior. The only
+/// non-text event accepted from content is an unmodified Return generated from a
+/// normalized line break when the dedicated preference permits it.
 //****************************************************************************************************************************************************
-void performRestrictedTextInput(qint32 eraseCount, QString const &text, qint32 cursorLeftCount) {
+void performRestrictedTextInput(qint32 eraseCount, QString const &text, qint32 cursorLeftCount,
+    bool allowRealLineBreaks) {
     waitForModifierRelease();
 
     qint32 const safeEraseCount = qMax<qint32>(eraseCount, 0);
     qint32 const safeCursorLeftCount = qMax<qint32>(cursorLeftCount, 0);
-    QString const safeText = tlf::sanitizeText(text);
+    QString const safeText = tlf::sanitizeText(text, allowRealLineBreaks);
     quint64 const eventCount64 = 2ULL * (static_cast<quint64>(safeEraseCount)
         + static_cast<quint64>(safeText.size()) + static_cast<quint64>(safeCursorLeftCount));
     if (eventCount64 > kMaxRestrictedInputEventCount)
@@ -433,8 +437,12 @@ void performRestrictedTextInput(qint32 eraseCount, QString const &text, qint32 c
     events.reserve(static_cast<size_t>(eventCount64));
     for (qint32 index = 0; index < safeEraseCount; ++index)
         appendVirtualKeyPress(events, VK_BACK);
-    for (QChar const character: safeText)
-        appendUnicodeCodeUnit(events, character);
+    for (QChar const character: safeText) {
+        if (allowRealLineBreaks && (character == QChar::LineFeed))
+            appendVirtualKeyPress(events, VK_RETURN);
+        else
+            appendUnicodeCodeUnit(events, character);
+    }
     for (qint32 index = 0; index < safeCursorLeftCount; ++index)
         appendVirtualKeyPress(events, VK_LEFT);
 
@@ -480,11 +488,12 @@ bool performTextSubstitution(qint32 charCount, QString const &newText, qint32 cu
         QString const text = newText + (triggersOnSpace && prefs.keepFinalSpaceCharacter() && (!triggeredByPicker)
                                         ? " " : QString());
         if constexpr (constants::kRestrictedBuild) {
+            bool const allowRealLineBreaks = prefs.allowRealLineBreaksInSnippets();
             qint32 const eraseCount = triggeredByPicker ? 0
                 : qMax<qint32>(charCount + (triggersOnSpace ? 1 : 0), 0);
             qint32 const cursorLeftCount = cursorPos < 0 ? 0
-                : qMax<qint32>(0, printableCharacterCount(tlf::sanitizeText(text)) - cursorPos);
-            performRestrictedTextInput(eraseCount, text, cursorLeftCount);
+                : qMax<qint32>(0, printableCharacterCount(tlf::sanitizeText(text, allowRealLineBreaks)) - cursorPos);
+            performRestrictedTextInput(eraseCount, text, cursorLeftCount, allowRealLineBreaks);
         } else {
             if (!triggeredByPicker)
                 eraseChars(qMax<qint32>(charCount + (triggersOnSpace ? 1 : 0), 0));

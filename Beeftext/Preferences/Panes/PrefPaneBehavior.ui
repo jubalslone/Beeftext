@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>708</width>
-    <height>146</height>
+    <height>292</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -52,10 +52,46 @@
     </layout>
    </item>
    <item>
-    <widget class="QCheckBox" name="checkAutoStart">
+   <widget class="QCheckBox" name="checkAutoStart">
      <property name="text">
       <string>&amp;Automatically start Beeftext at login</string>
      </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="groupMultilineSnippets">
+     <property name="title">
+      <string>Multiline snippets</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayoutMultilineSnippets">
+      <item>
+       <widget class="QRadioButton" name="radioAllowRealLineBreaks">
+        <property name="text">
+         <string>Allow real line breaks</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="radioShowVisibleLineBreaks">
+        <property name="text">
+         <string>Show line breaks as visible \n text</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="labelMultilineSnippetsHelp">
+        <property name="text">
+         <string>Real line breaks preserve normal multiline snippets, but a line break may submit some forms. Showing \n instead keeps the text visible without sending a line break to the target application.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </item>
    <item>

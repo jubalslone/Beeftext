@@ -33,7 +33,8 @@ QString ensureStringHasCRLFLineEndings(QString const &str); ///< Return a copy o
 void insertText(QString const &text); ///< Insert the text given text.
 void renderShortcut(SpShortcut const &shortcut); ///< Synthesize the given shortcut.
 void moveCursorLeft(qint32 count); ///< Move the cursor the the left by the specified number of characters.
-void performRestrictedTextInput(qint32 eraseCount, QString const &text, qint32 cursorLeftCount); ///< Perform one fail-closed restricted input transaction.
+void performRestrictedTextInput(qint32 eraseCount, QString const &text, qint32 cursorLeftCount,
+    bool allowRealLineBreaks); ///< Perform one fail-closed restricted input transaction.
 bool performTextSubstitution(qint32 charCount, QString const &newText, qint32 cursorPos, ETriggerSource source); ///< Substitute the last characters with the specified text
 void reportError(QWidget *parent, QString const &logMessage, QString const &userMessage = QString()); ///< Report an error to the user
 bool isAppRunningOnWindows10OrHigher(); ///< Return true if and only if the application is running on windows 10 or higher

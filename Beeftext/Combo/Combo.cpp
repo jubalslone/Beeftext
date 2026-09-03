@@ -428,13 +428,15 @@ bool Combo::performSubstitution(bool triggeredByPicker) {
         if constexpr (constants::kRestrictedBuild) {
             if (keepFinalSpace)
                 newText += " ";
-            tlf::RestrictedSnippet const snippet = tlf::prepareSnippet(newText);
+            bool const allowRealLineBreaks = prefs.allowRealLineBreaksInSnippets();
+            tlf::RestrictedSnippet const snippet = tlf::prepareSnippet(newText, allowRealLineBreaks);
             if (snippet.cursorSyntaxRejected)
                 globals::debugLog().addWarning("A restricted snippet contained ambiguous or unsafe cursor syntax; the marker was inserted literally.");
 
             qint32 const eraseCount = triggeredByPicker ? 0
                 : qMax<qint32>(qint32(keyword_.size()) + (triggersOnSpace ? 1 : 0), 0);
-            performRestrictedTextInput(eraseCount, snippet.text, qMax<qint32>(snippet.cursorLeftCount, 0));
+            performRestrictedTextInput(eraseCount, snippet.text, qMax<qint32>(snippet.cursorLeftCount, 0),
+                                       allowRealLineBreaks);
         } else {
             qint32 const cursorLShift = computeCursorLeftShift(newText);
             if (cursorLShift >= 0)

@@ -8,7 +8,9 @@
 #include "TLFSafeBuild.h"
 
 #include <QChar>
+#include <QJsonObject>
 #include <QRegularExpression>
+#include <QSettings>
 #include <limits>
 
 
@@ -33,7 +35,7 @@ bool isLowSurrogate(quint16 value) {
 }
 
 
-bool isSafeCursorSuffix(QString const &suffix) {
+bool isSafeCursorSuffix(QString const &suffix, bool allowRealLineBreaks) {
     if (suffix.size() > std::numeric_limits<qint32>::max())
         return false;
 
@@ -42,6 +44,8 @@ bool isSafeCursorSuffix(QString const &suffix) {
     // Windows controls used for QA. Unicode grapheme movement is application-specific.
     for (QChar const character: suffix) {
         quint16 const value = character.unicode();
+        if (allowRealLineBreaks && (value == '\n'))
+            continue;
         if ((value < 0x20) || (value > 0x7e))
             return false;
     }
@@ -88,7 +92,7 @@ ERestrictedVariable classifyVariable(QString const &variable) {
 }
 
 
-QString sanitizeText(QString const &text) {
+QString sanitizeText(QString const &text, bool allowRealLineBreaks) {
     QString result;
     result.reserve(text.size());
 
@@ -99,11 +103,11 @@ QString sanitizeText(QString const &text) {
         if (value == '\r') {
             if (((index + 1) < text.size()) && (text[index + 1] == QChar::LineFeed))
                 ++index;
-            result += QStringLiteral("\\n");
+            result += allowRealLineBreaks ? QStringLiteral("\n") : QStringLiteral("\\n");
             continue;
         }
         if (value == '\n') {
-            result += QStringLiteral("\\n");
+            result += allowRealLineBreaks ? QStringLiteral("\n") : QStringLiteral("\\n");
             continue;
         }
         if (value == '\t') {
@@ -142,9 +146,9 @@ QString sanitizeText(QString const &text) {
 }
 
 
-RestrictedSnippet prepareSnippet(QString const &text) {
+RestrictedSnippet prepareSnippet(QString const &text, bool allowRealLineBreaks) {
     RestrictedSnippet result;
-    result.text = sanitizeText(text);
+    result.text = sanitizeText(text, allowRealLineBreaks);
 
     qsizetype const markerIndex = result.text.indexOf(kCursorVariable);
     if (markerIndex < 0)
@@ -156,7 +160,7 @@ RestrictedSnippet prepareSnippet(QString const &text) {
     }
 
     QString const suffix = result.text.mid(markerIndex + kCursorVariable.size());
-    if (!isSafeCursorSuffix(suffix)) {
+    if (!isSafeCursorSuffix(suffix, allowRealLineBreaks)) {
         result.cursorSyntaxRejected = true;
         return result;
     }
@@ -164,6 +168,38 @@ RestrictedSnippet prepareSnippet(QString const &text) {
     result.text.remove(markerIndex, kCursorVariable.size());
     result.cursorLeftCount = static_cast<qint32>(suffix.size());
     return result;
+}
+
+
+bool readAllowRealLineBreaksInSnippets(QSettings const &settings) {
+    QVariant const value = settings.value(QString::fromLatin1(kAllowRealLineBreaksInSnippetsSettingKey));
+    if (!value.isValid())
+        return kDefaultAllowRealLineBreaksInSnippets;
+
+    QString const normalized = value.toString().trimmed().toLower();
+    if ((normalized == QStringLiteral("true")) || (normalized == QStringLiteral("1")))
+        return true;
+    if ((normalized == QStringLiteral("false")) || (normalized == QStringLiteral("0")))
+        return false;
+    return kDefaultAllowRealLineBreaksInSnippets;
+}
+
+
+void writeAllowRealLineBreaksInSnippets(QSettings &settings, bool value) {
+    settings.setValue(QString::fromLatin1(kAllowRealLineBreaksInSnippetsSettingKey), value);
+}
+
+
+void exportAllowRealLineBreaksInSnippets(QSettings const &settings, QJsonObject &object) {
+    object[QString::fromLatin1(kAllowRealLineBreaksInSnippetsSettingKey)] =
+        readAllowRealLineBreaksInSnippets(settings);
+}
+
+
+void importAllowRealLineBreaksInSnippets(QJsonObject const &object, QSettings &settings) {
+    QJsonValue const value = object.value(QString::fromLatin1(kAllowRealLineBreaksInSnippetsSettingKey));
+    writeAllowRealLineBreaksInSnippets(settings,
+        value.isBool() ? value.toBool() : kDefaultAllowRealLineBreaksInSnippets);
 }
 
 

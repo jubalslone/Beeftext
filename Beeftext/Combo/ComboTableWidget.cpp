@@ -525,7 +525,8 @@ void ComboTableWidget::onActionCopySnippet() {
     if (cancelled)
         return;
     if constexpr (constants::kRestrictedBuild)
-        text = tlf::prepareSnippet(text).text;
+        text = tlf::prepareSnippet(text,
+            PreferencesManager::instance().allowRealLineBreaksInSnippets()).text;
     else
         text.remove(constants::kVariableRegExp); ///< Remove all remaining variables (#{cursor},  #{delay:},... )
     QGuiApplication::clipboard()->setText(text);

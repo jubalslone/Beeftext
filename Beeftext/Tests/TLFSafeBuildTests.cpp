@@ -7,7 +7,12 @@
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QDir>
+#include <QFileInfo>
+#include <QJsonObject>
+#include <QSettings>
 #include <QStringList>
+#include <QTemporaryDir>
 
 
 namespace {
@@ -89,6 +94,49 @@ void testSanitizer() {
 }
 
 
+void testMultilineSanitizer() {
+    QString const mixedLineEndings = "a\n\nb\r\nc\rd\n";
+    expectText(tlf::sanitizeText(mixedLineEndings, true), "a\n\nb\nc\nd\n",
+               "real-line-break mode normalizes LF, CRLF, and CR to one LF");
+    expectText(tlf::sanitizeText(mixedLineEndings, false), "a\\n\\nb\\nc\\nd\\n",
+               "strict mode renders every logical line break as visible text");
+    expectText(tlf::sanitizeText(tlf::sanitizeText(mixedLineEndings, true), true),
+               tlf::sanitizeText(mixedLineEndings, true),
+               "real-line-break sanitization is idempotent");
+
+    QString emoji;
+    emoji += QChar(0xd83d);
+    emoji += QChar(0xde00);
+    QString const multilineEmoji = QString("before\n") + emoji + "\nafter";
+    expectText(tlf::sanitizeText(multilineEmoji, true), multilineEmoji,
+               "real line breaks do not change valid surrogate pairs");
+    expectText(tlf::sanitizeText(QString(QChar(0x2028)), true), "\\u2028",
+               "Unicode line separators remain visible in real-line-break mode");
+}
+
+
+void testBlockedControlsInBothModes() {
+    QStringList const blocked = {
+        "#{key:enter}", "#{shortcut:Win+R}", "#{delay:500}", "#{clipboard}",
+        "#{envVar:USERNAME}", "#{powershell:C:\\test.ps1}"
+    };
+    for (bool const allowRealLineBreaks: { false, true }) {
+        for (QString const &token: blocked) {
+            tlf::RestrictedSnippet const snippet = tlf::prepareSnippet(token, allowRealLineBreaks);
+            expectText(snippet.text, token,
+                QString("%1 remains literal when real line breaks are %2")
+                    .arg(token, allowRealLineBreaks ? "allowed" : "visible"));
+            expect(snippet.cursorLeftCount == -1, "blocked syntax cannot create cursor movement");
+        }
+    }
+
+    tlf::RestrictedSnippet const multiline =
+        tlf::prepareSnippet("first\n#{key:enter}\nlast", true);
+    expectText(multiline.text, "first\n#{key:enter}\nlast",
+               "allowed text line breaks do not activate a blocked Enter variable");
+}
+
+
 void testCursorPlan() {
     tlf::RestrictedSnippet snippet = tlf::prepareSnippet("plain");
     expectText(snippet.text, "plain", "plain text is unchanged");
@@ -124,6 +172,62 @@ void testCursorPlan() {
     expectText(snippet.text, "a#{key:enter}#{delay:10}", "blocked control syntax remains visible");
     expect(snippet.cursorLeftCount == QString("#{key:enter}#{delay:10}").size(),
            "blocked literal syntax is included in the cursor bound");
+
+    snippet = tlf::prepareSnippet("before\n#{cursor}after\nline", true);
+    expectText(snippet.text, "before\nafter\nline", "newlines before and after cursor are preserved when allowed");
+    expect(snippet.cursorLeftCount == QString("after\nline").size(),
+           "each allowed logical line break counts as one bounded cursor movement");
+
+    snippet = tlf::prepareSnippet("before#{cursor}\r\n", true);
+    expectText(snippet.text, "before\n", "CRLF after cursor is normalized to one line break");
+    expect(snippet.cursorLeftCount == 1, "normalized CRLF requires one bounded cursor movement");
+}
+
+
+void testMultilinePreferencePersistence() {
+    QTemporaryDir temporaryDirectory;
+    expect(temporaryDirectory.isValid(), "temporary preference directory is available");
+    if (!temporaryDirectory.isValid())
+        return;
+
+    QString const dataFolder = QDir(temporaryDirectory.path()).absoluteFilePath("Data");
+    expect(QDir().mkpath(dataFolder), "portable Data test folder is created");
+    QString const settingsPath = QDir(dataFolder).absoluteFilePath("Settings.ini");
+
+    {
+        QSettings settings(settingsPath, QSettings::IniFormat);
+        expect(!tlf::readAllowRealLineBreaksInSnippets(settings),
+               "missing multiline preference defaults to visible line breaks");
+        tlf::writeAllowRealLineBreaksInSnippets(settings, true);
+        settings.sync();
+        expect(settings.status() == QSettings::NoError, "multiline preference is written without error");
+    }
+
+    expect(QFileInfo(settingsPath).exists(), "portable multiline preference is stored under Data");
+    {
+        QSettings reloaded(settingsPath, QSettings::IniFormat);
+        expect(tlf::readAllowRealLineBreaksInSnippets(reloaded),
+               "multiline preference survives a settings reload");
+
+        QJsonObject exported;
+        tlf::exportAllowRealLineBreaksInSnippets(reloaded, exported);
+        expect(exported.value(QString::fromLatin1(tlf::kAllowRealLineBreaksInSnippetsSettingKey)).toBool(),
+               "multiline preference is included in preference export");
+
+        tlf::writeAllowRealLineBreaksInSnippets(reloaded, false);
+        tlf::importAllowRealLineBreaksInSnippets(exported, reloaded);
+        expect(tlf::readAllowRealLineBreaksInSnippets(reloaded),
+               "multiline preference is restored from preference import");
+
+        tlf::importAllowRealLineBreaksInSnippets(QJsonObject(), reloaded);
+        expect(!tlf::readAllowRealLineBreaksInSnippets(reloaded),
+               "older preference imports without the setting remain fail-closed");
+
+        reloaded.setValue(QString::fromLatin1(tlf::kAllowRealLineBreaksInSnippetsSettingKey),
+                          "not-a-boolean");
+        expect(!tlf::readAllowRealLineBreaksInSnippets(reloaded),
+               "invalid stored multiline preference remains fail-closed");
+    }
 }
 
 
@@ -134,7 +238,10 @@ int main(int argc, char *argv[]) {
     QCoreApplication application(argc, argv);
     testVariableAllowlist();
     testSanitizer();
+    testMultilineSanitizer();
+    testBlockedControlsInBothModes();
     testCursorPlan();
+    testMultilinePreferencePersistence();
     if (failureCount == 0)
         qInfo() << "All TLF restricted-build tests passed.";
     return failureCount == 0 ? 0 : 1;

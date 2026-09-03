@@ -68,6 +68,8 @@ public: // member functions
     bool useCustomTheme() const; ///< Get the value for the 'Use custom theme' preference
     void setUseAutomaticSubstitution(bool value) const; ///< Set the value for the 'Use automatic substitution' preference
     bool useAutomaticSubstitution() const; ///< Get the value for the 'Use automatic substitution' preference
+    void setAllowRealLineBreaksInSnippets(bool value) const; ///< Set whether restricted snippets may insert real line breaks.
+    bool allowRealLineBreaksInSnippets() const; ///< Get whether restricted snippets may insert real line breaks.
     void setComboTriggersOnSpace(bool value) const; ///< Set the value for the 'Combo triggers on space' preference.
     bool comboTriggersOnSpace() const; ///< Set the value for the 'Combo triggers on space' preference.
     void setKeepFinalSpaceCharacter(bool value) const; ///< Set the value for the 'Keep final space character' preference.
@@ -164,6 +166,7 @@ private: // data members
 
     public: // data members
         bool useAutomaticSubstitution { true }; ///< Cached value for the 'use automatic substitution' preference value
+        bool allowRealLineBreaksInSnippets { false }; ///< Cached restricted multiline-snippet preference.
         bool comboTriggersOnSpace { false }; ///< Cached value for the 'combo trigger on space' preference.
         bool keepFinalSpaceCharacter { false }; ///< Cached value for the 'keep final space character' preference.
         SpShortcut comboTriggerShortcut; ///< Cached value for the 'combo trigger shortcut' preference

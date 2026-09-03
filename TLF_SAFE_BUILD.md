@@ -18,13 +18,24 @@ Everything else, including PowerShell, environment, clipboard, Discord clipboard
 
 ## Restricted text output
 
-Substitution no longer uses the clipboard or a synthetic paste chord. Deletion, UTF-16 Unicode insertion, and bounded cursor-left movement are submitted as one serial Windows input transaction while Beeftext's keyboard hook is disabled.
+Substitution does not use the clipboard or a synthetic paste chord. Deletion, UTF-16 Unicode insertion, permitted line breaks, and bounded cursor-left movement are submitted as one serial Windows input transaction while Beeftext's keyboard hook is disabled.
 
-For safety, line endings are inserted visibly as `\n`, tabs as `\t`, and other control characters as `\uXXXX`. Multiline expansion is therefore intentionally unavailable in this build: a line break must never become an accidental Enter/submit command in the target application. Valid UTF-16 surrogate pairs, including emoji, are preserved. Unpaired surrogates are made visible.
+Preferences > Behavior provides two **Multiline snippets** modes:
 
-Cursor movement is enabled only when there is exactly one exact `#{cursor}` marker and all text after it is printable ASCII. Otherwise the marker remains literal and no cursor key is sent. This keeps every cursor-left event bounded within the newly inserted suffix.
+- **Show line breaks as visible `\n` text** is the default. It preserves the behavior of earlier Lean Beeftext builds and prevents a snippet line break from affecting the target application.
+- **Allow real line breaks** is an opt-in compatibility mode for ordinary multiline Beeftext snippets. CR, LF, and CRLF are normalized to one logical line break. Repeated and trailing line breaks are preserved.
+
+The persisted setting key is `AllowRealLineBreaksInSnippets`. Missing or invalid values—including preference files exported by earlier Lean builds—select the visible-`\n` default.
+
+Upstream Beeftext normally normalizes line endings to CRLF and pastes the snippet. Its typing fallback generates an unmodified Return for each LF because Windows Unicode input does not reliably create a line break in common targets. Lean Beeftext never restores the clipboard path. In compatibility mode, only a normalized line break in the fully evaluated text may generate an unmodified Return; `#{key:enter}`, shortcut, delay, and other control syntax remain literal. Windows controls cannot distinguish that Return from a user pressing Enter, so a real line break may submit a single-line form. Enable compatibility mode only where that behavior is acceptable.
+
+Tabs remain visible as `\t`, and other control characters as `\uXXXX`, in both modes. Valid UTF-16 surrogate pairs, including emoji, are preserved. Unpaired surrogates are made visible.
+
+Cursor movement is enabled only when there is exactly one exact `#{cursor}` marker and all text after it is printable ASCII, plus normalized line breaks when compatibility mode is enabled. Otherwise the marker remains literal and no cursor key is sent. Each normalized line break counts as one inserted caret position, keeping every cursor-left event bounded within the newly inserted suffix.
 
 Windows may reject synthetic input into a higher-integrity (for example, administrator-elevated) target because of UIPI. Lean Beeftext reports this failure; running Beeftext elevated is not recommended.
+
+Windows 11 Notepad may corrupt rapid `KEYEVENTF_UNICODE` input while its spellcheck or autocorrect features are enabled. Disable those Notepad features when using Lean Beeftext. Microsoft Word has been verified without that adjustment.
 
 ## Portable data boundary
 
@@ -39,14 +50,14 @@ The Windows workflow checks out the exact source commit, refuses dirty tracked s
 ## Windows QA checklist
 
 1. Extract the artifact to a normal writable folder. Confirm `Portable.bin`, `BUILD_INFO.txt`, and `SHA256SUMS.txt` are present, then launch `Beeftext.exe` without elevation.
-2. Create and trigger `leanv` → `Lean Beeftext is alive.` Confirm the exact sentence replaces the keyword and no literal `v` remains.
-3. Trigger `Today is #{date}` and a snippet containing `#{time}` and `#{dateTime}`. Confirm each produces text.
-4. Trigger `Hello #{input:Name}.` Enter `Ada`; confirm `Hello Ada.` and confirm Cancel leaves the typed keyword untouched.
-5. Trigger `Before#{cursor}After`; type `X`; confirm the result is `BeforeXAfter`. Also confirm repeated or mixed-case cursor markers remain literal and do not move outside the inserted text.
-6. In one imported or manually typed snippet, include `#{clipboard}`, `#{envVar:USERNAME}`, `#{powershell:C:\test.ps1}`, `#{shortcut:Win+R}`, `#{key:enter}`, and `#{delay:500}`. Confirm every token appears literally, no clipboard content appears, no window opens, no command runs, and Enter is not pressed.
-7. Trigger an emoji shortcode and a picker-selected emoji. Confirm the emoji is inserted correctly.
-8. Trigger a snippet containing a real line break, tab, and control character if practical. Confirm visible `\n`, `\t`, or `\uXXXX` text appears and the target form is not submitted.
-9. Hold Ctrl or Alt while triggering a combo for more than one second. Confirm Lean Beeftext reports that insertion was refused, does not erase the keyword, and no modifier remains stuck afterward.
-10. Change settings, create a combo, and allow a backup. Restart and confirm all resulting application data is under `Data`; confirm no custom backup location control is offered.
-11. Close the main window and confirm the tray app remains running. Then choose **Exit** from the tray menu and confirm `Beeftext.exe` terminates.
+2. Leave **Show line breaks as visible `\n` text** selected. Trigger snippets containing LF, CRLF, repeated blank lines, and a trailing line break. Confirm every logical break appears as literal `\n` and no form is submitted.
+3. Select **Allow real line breaks**, restart Beeftext, and confirm the selection persists. Trigger the same snippets in Word, Notepad with spellcheck/autocorrect disabled, an Outlook-style editor, and a browser textarea. Confirm their real line breaks, blank lines, and trailing line break.
+4. In real-line-break mode, test `Before#{cursor}After`, a newline before `#{cursor}`, and a newline after it. Type `X` and confirm the caret remains within the text just inserted.
+5. Test a multiline snippet containing `#{input:...}` and multiline nested combos used through `#{combo:...}`, `#{upper:...}`, `#{lower:...}`, and `#{trim:...}`. Confirm the input text and line breaks follow the selected mode.
+6. In both modes, include `#{clipboard}`, `#{envVar:USERNAME}`, `#{powershell:C:\test.ps1}`, `#{shortcut:Win+R}`, `#{key:enter}`, and `#{delay:500}`. Confirm every token appears literally, no clipboard content appears, no window opens, no command runs, and no programmed control action occurs.
+7. Regression-test `leanv` → `Lean Beeftext is alive.`, `#{date}`, `#{time}`, `#{dateTime}`, `#{input:Name}`, and emoji insertion.
+8. In both modes, test a tab and another control character. Confirm visible `\t` or `\uXXXX` text appears.
+9. Hold Ctrl or Alt while triggering a combo for more than one second. Confirm insertion is refused, the keyword remains intact, and no modifier remains stuck.
+10. Restart after changing the multiline preference and confirm `Data/Settings.ini` contains the persisted setting and all application data remains under `Data`.
+11. Close the main window and confirm the tray app remains running. Then choose **Exit** and confirm `Beeftext.exe` terminates.
 12. With a network monitor if available, launch the app and open Preferences. Confirm there is no request to the Beeftext update service.
