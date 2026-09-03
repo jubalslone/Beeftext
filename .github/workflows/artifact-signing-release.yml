@@ -1,0 +1,311 @@
+name: Windows signed release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact 40-character source commit to build and sign
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: artifact-signing-production
+  cancel-in-progress: false
+
+jobs:
+  build-sign-package:
+    name: Build, test, sign, verify, and package
+    runs-on: windows-2022
+    timeout-minutes: 40
+    environment: artifact-signing-production
+
+    steps:
+      - name: Require explicitly enabled signing configuration
+        shell: pwsh
+        env:
+          SIGNING_ENABLED: ${{ vars.ARTIFACT_SIGNING_ENABLED }}
+          SIGNING_ENDPOINT: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          SIGNING_PROFILE: ${{ vars.ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
+          EXPECTED_SUBJECT: ${{ vars.EXPECTED_AUTHENTICODE_SUBJECT }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:SIGNING_ENABLED -cne 'true') {
+            throw 'Production Artifact Signing is disabled. Set ARTIFACT_SIGNING_ENABLED to exactly true only after external setup and review.'
+          }
+
+          $required = @{
+            ARTIFACT_SIGNING_ENDPOINT = $env:SIGNING_ENDPOINT
+            ARTIFACT_SIGNING_ACCOUNT_NAME = $env:SIGNING_ACCOUNT
+            ARTIFACT_SIGNING_CERTIFICATE_PROFILE = $env:SIGNING_PROFILE
+            EXPECTED_AUTHENTICODE_SUBJECT = $env:EXPECTED_SUBJECT
+            AZURE_CLIENT_ID = $env:AZURE_CLIENT_ID
+            AZURE_TENANT_ID = $env:AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID = $env:AZURE_SUBSCRIPTION_ID
+          }
+          $missing = @($required.GetEnumerator() | Where-Object { [string]::IsNullOrWhiteSpace($_.Value) } | ForEach-Object Key)
+          if ($missing.Count -ne 0) {
+            throw "Production Artifact Signing configuration is incomplete: $($missing -join ', ')."
+          }
+
+          $sourceCommit = '${{ inputs.source_commit }}'
+          if ($sourceCommit -cnotmatch '^[0-9a-f]{40}$') {
+            throw 'source_commit must be an exact lowercase 40-character Git commit SHA.'
+          }
+
+      - name: Check out exact source commit and submodules
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.source_commit }}
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify source identity and cleanliness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = '${{ inputs.source_commit }}'
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -cne $expected) {
+            throw "Checked out $actual, expected $expected."
+          }
+
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The checked-out source tree has unstaged tracked changes.' }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The checked-out source tree has staged changes.' }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'A submodule has unstaged tracked changes.' }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'A submodule has staged changes.' }
+
+      - name: Install Qt 6.8 LTS
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.8.*'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+          setup-python: true
+
+      - name: Configure CMake
+        shell: pwsh
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+
+      - name: Build exact committed source
+        shell: pwsh
+        run: cmake --build build --config Release --parallel -- /nologo /verbosity:minimal
+
+      - name: Run complete test suite
+        shell: pwsh
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Verify build did not rewrite tracked source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The build modified the source worktree.' }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The build staged source changes.' }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'The build modified a submodule worktree.' }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'The build staged submodule changes.' }
+
+      - name: Stage only the Lean Beeftext executable for signing
+        id: stage
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $executables = @(Get-ChildItem -Path build -Recurse -File -Filter Beeftext.exe |
+            Where-Object { $_.FullName -match '[\\/]Release[\\/]' })
+          if ($executables.Count -ne 1) {
+            throw "Expected exactly one Release Beeftext.exe, found $($executables.Count)."
+          }
+
+          $signingFolder = Join-Path $PWD 'signing'
+          New-Item -ItemType Directory -Path $signingFolder -Force | Out-Null
+          $stagedExecutable = Join-Path $signingFolder 'Beeftext.exe'
+          Copy-Item -LiteralPath $executables[0].FullName -Destination $stagedExecutable
+          "executable=$stagedExecutable" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Authenticate to Azure with GitHub OIDC
+        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign only Beeftext.exe with Artifact Signing
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_CERTIFICATE_PROFILE }}
+          files: ${{ steps.stage.outputs.executable }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+          exclude-shared-token-cache-credential: true
+          exclude-visual-studio-credential: true
+          exclude-visual-studio-code-credential: true
+          exclude-azure-cli-credential: false
+          exclude-azure-powershell-credential: true
+          exclude-azure-developer-cli-credential: true
+          exclude-interactive-browser-credential: true
+
+      - name: Verify Authenticode publisher, timestamp, and trust
+        id: verify
+        shell: pwsh
+        env:
+          EXPECTED_SUBJECT: ${{ vars.EXPECTED_AUTHENTICODE_SUBJECT }}
+          SIGNED_EXECUTABLE: ${{ steps.stage.outputs.executable }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $signature = Get-AuthenticodeSignature -LiteralPath $env:SIGNED_EXECUTABLE
+          if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+            throw "Authenticode status is $($signature.Status): $($signature.StatusMessage)"
+          }
+          if (-not $signature.SignerCertificate) {
+            throw 'The signed executable has no signer certificate.'
+          }
+          if (-not [string]::Equals($signature.SignerCertificate.Subject, $env:EXPECTED_SUBJECT,
+              [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Unexpected Authenticode subject: $($signature.SignerCertificate.Subject)"
+          }
+          if (-not $signature.TimeStamperCertificate) {
+            throw 'The signed executable has no RFC 3161 timestamp certificate.'
+          }
+
+          $signTool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -File -Filter signtool.exe |
+            Where-Object { $_.FullName -match '[\\/]x64[\\/]signtool\.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signTool) {
+            throw 'Could not locate the x64 Windows SDK SignTool.'
+          }
+          & $signTool.FullName verify /pa /all /v $env:SIGNED_EXECUTABLE
+          if ($LASTEXITCODE -ne 0) {
+            throw "SignTool verification failed with exit code $LASTEXITCODE."
+          }
+
+          "subject=$($signature.SignerCertificate.Subject)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "thumbprint=$($signature.SignerCertificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Assemble package from the verified signed executable
+        shell: pwsh
+        env:
+          SIGNED_EXECUTABLE: ${{ steps.stage.outputs.executable }}
+          SIGNER_SUBJECT: ${{ steps.verify.outputs.subject }}
+          SIGNER_THUMBPRINT: ${{ steps.verify.outputs.thumbprint }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = Join-Path $PWD 'artifact/Beeftext-TLF-Safe'
+          New-Item -ItemType Directory -Path $package -Force | Out-Null
+          Copy-Item -LiteralPath $env:SIGNED_EXECUTABLE -Destination (Join-Path $package 'Beeftext.exe')
+
+          $buildExecutable = Get-ChildItem -Path build -Recurse -File -Filter Beeftext.exe |
+            Where-Object { $_.FullName -match '[\\/]Release[\\/]' } |
+            Select-Object -First 1
+          $translationDir = Join-Path $buildExecutable.DirectoryName 'translations'
+          if (Test-Path $translationDir) {
+            Copy-Item -Path $translationDir -Destination $package -Recurse
+          }
+
+          & windeployqt --release --compiler-runtime --dir $package (Join-Path $package 'Beeftext.exe')
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed with exit code $LASTEXITCODE." }
+
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vsInstall = & $vswhere -latest -products * -property installationPath
+          if (-not $vsInstall) { throw 'Could not locate the Visual Studio installation.' }
+          $redistRoot = Join-Path $vsInstall 'VC/Redist/MSVC'
+          $redistVersion = Get-ChildItem -Path $redistRoot -Directory |
+            Where-Object { $_.Name -match '^\d+(\.\d+)+$' } |
+            Sort-Object { [version]$_.Name } -Descending |
+            Select-Object -First 1
+          if (-not $redistVersion) { throw 'Could not locate the Visual C++ runtime version.' }
+          $crtDir = Get-ChildItem -Path (Join-Path $redistVersion.FullName 'x64') -Directory -Filter 'Microsoft.VC*.CRT' |
+            Select-Object -First 1
+          if (-not $crtDir) { throw 'Could not locate the x64 Visual C++ runtime directory.' }
+          Copy-Item -Path (Join-Path $crtDir.FullName '*.dll') -Destination $package
+
+          foreach ($runtimeDll in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
+            if (-not (Test-Path (Join-Path $package $runtimeDll))) {
+              throw "The portable package is missing $runtimeDll."
+            }
+          }
+
+          Copy-Item -Path LICENSE -Destination $package
+          Copy-Item -Path TLF_SAFE_BUILD.md -Destination $package
+          Copy-Item -Path ARTIFACT_SIGNING.md -Destination $package
+          New-Item -ItemType File -Path (Join-Path $package 'Portable.bin') -Force | Out-Null
+
+          $packagedExecutable = Join-Path $package 'Beeftext.exe'
+          $packagedSignature = Get-AuthenticodeSignature -LiteralPath $packagedExecutable
+          if ($packagedSignature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or
+              -not $packagedSignature.TimeStamperCertificate -or
+              -not [string]::Equals($packagedSignature.SignerCertificate.Subject, $env:SIGNER_SUBJECT,
+                [StringComparison]::OrdinalIgnoreCase)) {
+            throw 'The packaged executable no longer has the verified Authenticode signature and timestamp.'
+          }
+
+          $qtVersion = (& qmake -query QT_VERSION).Trim()
+          @(
+            "Repository: $env:GITHUB_REPOSITORY"
+            "Source commit: ${{ inputs.source_commit }}"
+            "Workflow run: $env:GITHUB_RUN_ID"
+            "Qt version: $qtVersion"
+            "Authenticode: valid and RFC 3161 timestamped"
+            "Signer subject: $env:SIGNER_SUBJECT"
+            "Signer thumbprint: $env:SIGNER_THUMBPRINT"
+            "Built UTC: $((Get-Date).ToUniversalTime().ToString('o'))"
+          ) | Set-Content -Path (Join-Path $package 'BUILD_INFO.txt') -Encoding utf8
+
+          $checksumPath = Join-Path $package 'SHA256SUMS.txt'
+          Get-ChildItem -Path $package -Recurse -File |
+            Where-Object { $_.FullName -ne $checksumPath } |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relativePath = [IO.Path]::GetRelativePath($package, $_.FullName).Replace('\', '/')
+              $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+              "$hash  $relativePath"
+            } | Set-Content -Path $checksumPath -Encoding ascii
+
+      - name: Final tracked-source cleanliness check
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging modified the source worktree.' }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging staged source changes.' }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging modified a submodule worktree.' }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging staged submodule changes.' }
+
+      - name: Upload verified signed release candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Beeftext-TLF-Safe-signed-windows-x64-${{ inputs.source_commit }}
+          path: artifact/Beeftext-TLF-Safe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: End Azure session
+        if: always()
+        shell: pwsh
+        run: az logout

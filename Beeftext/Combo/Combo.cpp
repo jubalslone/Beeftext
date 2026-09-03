@@ -431,7 +431,7 @@ bool Combo::performSubstitution(bool triggeredByPicker) {
             bool const allowRealLineBreaks = prefs.allowRealLineBreaksInSnippets();
             tlf::RestrictedSnippet const snippet = tlf::prepareSnippet(newText, allowRealLineBreaks);
             if (snippet.cursorSyntaxRejected)
-                globals::debugLog().addWarning("A restricted snippet contained ambiguous or unsafe cursor syntax; the marker was inserted literally.");
+                globals::debugLog().addWarning("A restricted snippet contained unsafe cursor syntax; the marker was inserted literally.");
 
             qint32 const eraseCount = triggeredByPicker ? 0
                 : qMax<qint32>(qint32(keyword_.size()) + (triggersOnSpace ? 1 : 0), 0);

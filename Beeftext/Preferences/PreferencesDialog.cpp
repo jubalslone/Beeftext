@@ -11,12 +11,45 @@
 #include "PreferencesDialog.h"
 #include "BeeftextGlobals.h"
 #include <XMiLib/XMiLibConstants.h>
+#include <QAbstractSpinBox>
+#include <QComboBox>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QStyle>
+#include <QStyleOption>
 
 
 namespace {
 
 
 QString const kExportFileName = "BeeftextPrefs.json"; ///< The default file name for export/import of preferences.
+
+
+template<typename StyleOption>
+void ensureFontAwareHeight(QWidget &widget, QStyle::ContentsType contentsType) {
+    StyleOption option;
+    option.initFrom(&widget);
+    QSize const fontContentSize(0, widget.fontMetrics().height());
+    int const styleHeight = widget.style()->sizeFromContents(contentsType, &option, fontContentSize, &widget).height();
+    widget.setMinimumHeight(qMax(styleHeight, qMax(widget.minimumSizeHint().height(), widget.sizeHint().height())));
+}
+
+
+void ensureFontAwareControlHeights(QWidget &root) {
+    for (QComboBox *comboBox: root.findChildren<QComboBox *>())
+        ensureFontAwareHeight<QStyleOptionComboBox>(*comboBox, QStyle::CT_ComboBox);
+
+    for (QAbstractSpinBox *spinBox: root.findChildren<QAbstractSpinBox *>())
+        ensureFontAwareHeight<QStyleOptionSpinBox>(*spinBox, QStyle::CT_SpinBox);
+
+    for (QLineEdit *lineEdit: root.findChildren<QLineEdit *>()) {
+        if (!qobject_cast<QAbstractSpinBox *>(lineEdit->parentWidget()))
+            ensureFontAwareHeight<QStyleOptionFrame>(*lineEdit, QStyle::CT_LineEdit);
+    }
+
+    for (QPushButton *button: root.findChildren<QPushButton *>())
+        ensureFontAwareHeight<QStyleOptionButton>(*button, QStyle::CT_PushButton);
+}
 
 
 }
@@ -37,6 +70,7 @@ PreferencesDialog::PreferencesDialog(QWidget *parent)
 
     panes_ = { ui_.paneBehavior, ui_.paneCombos, ui_.paneEmojis, ui_.paneAppearance, ui_.paneAdvanced };
     this->load();
+    ensureFontAwareControlHeights(*this);
     ui_.tabPreferences->setCurrentIndex(0);
     QSize const size = QDialog::sizeHint();
     this->setMinimumSize(size);

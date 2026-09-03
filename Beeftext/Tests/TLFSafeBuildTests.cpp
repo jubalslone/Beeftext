@@ -154,19 +154,60 @@ void testCursorPlan() {
     expectText(snippet.text, "abc", "cursor marker at end is removed");
     expect(snippet.cursorLeftCount == 0, "cursor marker at end needs no move");
 
+    snippet = tlf::prepareSnippet("parent child-#{cursor}end");
+    expectText(snippet.text, "parent child-end",
+               "one cursor from a nested-combo expansion is removed");
+    expect(snippet.cursorLeftCount == QString("end").size(),
+           "one post-expansion nested cursor has a bounded move");
+
     snippet = tlf::prepareSnippet("#{cursor}X#{CURSOR}");
     expectText(snippet.text, "X#{CURSOR}", "mixed-case cursor text remains literal");
     expect(snippet.cursorLeftCount == snippet.text.size(), "mixed-case literal is included in the cursor bound");
 
     QString const repeated = "a#{cursor}b#{cursor}c";
     snippet = tlf::prepareSnippet(repeated);
-    expectText(snippet.text, repeated, "multiple exact cursor markers remain literal");
-    expect(snippet.cursorSyntaxRejected, "multiple exact cursor markers are rejected");
+    expectText(snippet.text, "abc", "two direct cursor markers are removed");
+    expect(snippet.cursorLeftCount == 1, "the last direct cursor marker wins");
+    expect(!snippet.cursorSyntaxRejected, "two safe direct cursor markers are deterministic");
+
+    QString const twiceExpandedChild = "parent child-#{cursor}end / child-#{cursor}end";
+    snippet = tlf::prepareSnippet(twiceExpandedChild);
+    expectText(snippet.text, "parent child-end / child-end",
+               "cursor markers from two nested-combo expansions are removed");
+    expect(snippet.cursorLeftCount == QString("end").size(),
+           "the last cursor from repeated nested-combo expansion wins");
+
+    snippet = tlf::prepareSnippet("parent #{cursor}one / child-#{cursor}two");
+    expectText(snippet.text, "parent one / child-two",
+               "direct and nested cursor markers share one post-expansion rule");
+    expect(snippet.cursorLeftCount == QString("two").size(),
+           "the last post-expansion marker wins regardless of its origin");
+
+    snippet = tlf::prepareSnippet("UPPER-#{CURSOR}-TEXT");
+    expectText(snippet.text, "UPPER-#{CURSOR}-TEXT",
+               "an upper transformation makes a cursor marker literal");
+    expect(snippet.cursorLeftCount == -1,
+           "transformed mixed-case cursor text cannot create movement");
+
+    snippet = tlf::prepareSnippet("lower-#{cursor}-text");
+    expectText(snippet.text, "lower--text",
+               "a lower or trim transformation that preserves an exact marker remains usable");
+    expect(snippet.cursorLeftCount == QString("-text").size(),
+           "transformation output uses the same bounded suffix rule");
 
     QString const unicodeSuffix = "a#{cursor}\u00e9";
     snippet = tlf::prepareSnippet(unicodeSuffix);
     expectText(snippet.text, unicodeSuffix, "Unicode cursor suffix remains literal");
-    expect(snippet.cursorSyntaxRejected, "Unicode cursor suffix is rejected as an ambiguous move");
+    expect(snippet.cursorSyntaxRejected, "Unicode cursor suffix is rejected as an unsafe move");
+
+    QString const repeatedUnsafe = "a#{cursor}b#{cursor}\u00e9";
+    snippet = tlf::prepareSnippet(repeatedUnsafe);
+    expectText(snippet.text, repeatedUnsafe,
+               "all markers remain literal when the final cursor suffix is unsafe");
+    expect(snippet.cursorLeftCount == -1,
+           "unsafe repeated cursor syntax cannot create movement");
+    expect(snippet.cursorSyntaxRejected,
+           "unsafe repeated cursor syntax fails closed");
 
     snippet = tlf::prepareSnippet("a#{cursor}#{key:enter}#{delay:10}");
     expectText(snippet.text, "a#{key:enter}#{delay:10}", "blocked control syntax remains visible");
@@ -181,6 +222,18 @@ void testCursorPlan() {
     snippet = tlf::prepareSnippet("before#{cursor}\r\n", true);
     expectText(snippet.text, "before\n", "CRLF after cursor is normalized to one line break");
     expect(snippet.cursorLeftCount == 1, "normalized CRLF requires one bounded cursor movement");
+
+    snippet = tlf::prepareSnippet("first#{cursor}\nsecond#{cursor}\nthird", true);
+    expectText(snippet.text, "first\nsecond\nthird",
+               "multiple markers preserve real line breaks after expansion");
+    expect(snippet.cursorLeftCount == QString("\nthird").size(),
+           "real-line-break mode bounds movement from the last marker");
+
+    snippet = tlf::prepareSnippet("first#{cursor}\r\nsecond#{cursor}\r\nthird", false);
+    expectText(snippet.text, "first\\nsecond\\nthird",
+               "multiple markers preserve visible line breaks in strict mode");
+    expect(snippet.cursorLeftCount == QString("\\nthird").size(),
+           "strict mode bounds movement from the last marker");
 }
 
 

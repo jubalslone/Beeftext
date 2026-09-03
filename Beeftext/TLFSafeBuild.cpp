@@ -150,14 +150,13 @@ RestrictedSnippet prepareSnippet(QString const &text, bool allowRealLineBreaks) 
     RestrictedSnippet result;
     result.text = sanitizeText(text, allowRealLineBreaks);
 
-    qsizetype const markerIndex = result.text.indexOf(kCursorVariable);
+    // Upstream v16 evaluates nested combos before cursor handling and uses the
+    // last cursor marker as the final caret position. Matching that rule makes
+    // repeated child-combo expansion useful while keeping the Left-event count
+    // bounded by the suffix that was actually inserted.
+    qsizetype const markerIndex = result.text.lastIndexOf(kCursorVariable);
     if (markerIndex < 0)
         return result;
-
-    if (result.text.indexOf(kCursorVariable, markerIndex + kCursorVariable.size()) >= 0) {
-        result.cursorSyntaxRejected = true;
-        return result;
-    }
 
     QString const suffix = result.text.mid(markerIndex + kCursorVariable.size());
     if (!isSafeCursorSuffix(suffix, allowRealLineBreaks)) {
@@ -165,7 +164,7 @@ RestrictedSnippet prepareSnippet(QString const &text, bool allowRealLineBreaks) 
         return result;
     }
 
-    result.text.remove(markerIndex, kCursorVariable.size());
+    result.text.remove(kCursorVariable, Qt::CaseSensitive);
     result.cursorLeftCount = static_cast<qint32>(suffix.size());
     return result;
 }
