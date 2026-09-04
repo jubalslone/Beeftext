@@ -105,6 +105,12 @@ void PreferencesDialog::changeEvent(QEvent *event) {
     if (QEvent::LanguageChange == event->type())
         ui_.retranslateUi(this);
     QDialog::changeEvent(event);
+
+    if ((QEvent::LanguageChange == event->type()) || (QEvent::FontChange == event->type())
+        || (QEvent::ApplicationFontChange == event->type()) || (QEvent::StyleChange == event->type())) {
+        ensureFontAwareControlHeights(*this);
+        this->setMinimumSize(this->minimumSize().expandedTo(QDialog::sizeHint()));
+    }
 }
 
 

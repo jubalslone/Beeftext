@@ -93,7 +93,7 @@
   </action>
   <action name="actionVisitBeeftextWiki">
    <property name="text">
-    <string>&amp;Beeftext Wiki</string>
+    <string>Project &amp;Documentation</string>
    </property>
    <property name="shortcut">
     <string>Shift+F1</string>

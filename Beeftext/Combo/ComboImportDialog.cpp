@@ -12,8 +12,6 @@
 #include "ComboManager.h"
 #include "Preferences/PreferencesManager.h"
 #include "BeeftextGlobals.h"
-#include "BeeftextConstants.h"
-#include "BeeftextUtils.h"
 #include <XMiLib/File/CsvIO.h>
 #include <XMiLib/Exception.h>
 #include <XMiLib/XMiLibConstants.h>
@@ -60,8 +58,6 @@ ComboImportDialog::ComboImportDialog(QString const &filePath, SpGroup const &gro
     connect(ui_.radioOverwrite, &QRadioButton::toggled, this, &ComboImportDialog::onConflictRadioToggled);
     connect(ui_.radioSkipConflicts, &QRadioButton::toggled, this, &ComboImportDialog::onConflictRadioToggled);
 
-    ui_.labelSupportedFormats->setText(ui_.labelSupportedFormats->text()
-        .arg(colorToHex(constants::blueBeeftextColor, false)));
     GroupList &groupList = ComboManager::instance().groupListRef();
     groupList.ensureNotEmpty();
     ui_.comboGroup->setContent(groupList);
@@ -304,5 +300,3 @@ void ComboImportDialog::onConflictRadioToggled(bool state) const {
         return; // we are only interested in signals from the radio being checked
     this->updateGui();
 }
-
-

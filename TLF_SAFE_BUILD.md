@@ -51,7 +51,11 @@ The Windows workflow checks out the exact source commit, refuses dirty tracked s
 
 Pull-request and routine QA artifacts remain unsigned. The disabled-by-default production signing design and external setup are documented in `ARTIFACT_SIGNING.md`; enabling it requires a protected GitHub Environment, reviewed Azure configuration, and an explicit flag. It has no silent unsigned fallback.
 
-Preferences controls use their Qt style and current font metrics to establish minimum heights when the dialog opens. This avoids clipping at Windows display or text scaling without imposing a fixed pixel height or changing the application font.
+Preferences controls use their Qt style and current font metrics to establish minimum heights when the dialog opens and after relevant font, language, or style changes. This avoids clipping at Windows display or text scaling without imposing a fixed pixel height or changing the application font.
+
+The light and dark themes use Qt palettes for their surface, text, selection, link, and disabled-state colors. Standard controls keep the platform style for checkbox/radio indicators, combo and spin controls, buttons, and keyboard focus cues. The small remaining stylesheets are limited to typography that conveys meaning and the custom frameless combo picker.
+
+Help, documentation, variables, import-format, translation-help, issue, release, and project-source links for this restricted build point to `https://github.com/jubalslone/Beeftext`. Until Lean-specific documentation pages are published there, general documentation links intentionally open the repository root rather than upstream instructions that describe unavailable features. Links to upstream Beeftext remain only when explicitly labeled as attribution or legacy compatibility information.
 
 ## Windows QA checklist
 
@@ -66,6 +70,7 @@ Preferences controls use their Qt style and current font metrics to establish mi
 9. In both modes, test a tab and another control character. Confirm visible `\t` or `\uXXXX` text appears.
 10. Hold Ctrl or Alt while triggering a combo for more than one second. Confirm insertion is refused, the keyword remains intact, and no modifier remains stuck.
 11. Restart after changing the multiline preference and confirm `Data/Settings.ini` contains the persisted setting and all application data remains under `Data`.
-12. At Windows display scaling 100%, 125%, and 150%, open each Preferences pane in both the light and dark themes. Check every combo box, shortcut field, spin box, and button—especially Combos defaults/manual shortcuts and Advanced delay/Restore—for complete text, borders, and focus indicators. If Windows text size is separately enlarged, repeat at that setting.
-13. Close the main window and confirm the tray app remains running. Then choose **Exit** and confirm `Beeftext.exe` terminates.
-14. With a network monitor if available, launch the app and open Preferences. Confirm there is no request to the Beeftext update service.
+12. At Windows display scaling 100%, 125%, and 150%, open every Preferences pane in both the light and dark themes. Check every checkbox, radio button, combo box, shortcut field, spin box, and button—especially Combos defaults/manual shortcuts and Advanced delay/Restore—for complete text, unmistakable checked state, distinct enabled/disabled state, clear selection, and visible keyboard focus. If Windows text size is separately enlarged, repeat at that setting.
+13. Open every Help-menu link, About-dialog link, About Variables link, Supported file formats link, and Other languages link. Confirm Lean project/help links use `jubalslone/Beeftext`; confirm every retained upstream link is visibly labeled as upstream attribution or legacy Beeftext v7.2.
+14. Close the main window and confirm the tray app remains running. Then choose **Exit** and confirm `Beeftext.exe` terminates.
+15. With a network monitor if available, launch the app and open Preferences. Confirm there is no request to the Beeftext update service.

@@ -17,11 +17,11 @@ namespace constants {
 xmilib::VersionNumber const kVersionNumber(16, 0);
 QString const kApplicationName = "Beeftext";
 QString const kOrganizationName = "beeftext.org";
-QString const kBeeftextWikiHomeUrl = "https://github.com/xmichelo/Beeftext/wiki";
-QString const kGettingStartedUrl = "https://github.com/xmichelo/Beeftext/wiki/Getting-started";
-QString const kBeeftextWikiVariablesUrl = "https://github.com/xmichelo/Beeftext/wiki/Variables";
-QString const kBeeftextReleasesPagesUrl = "https://github.com/xmichelo/Beeftext/releases";
-QString const kBeeftextIssueTrackerUrl = "https://github.com/xmichelo/Beeftext/issues";
+QString const kBeeftextWikiHomeUrl = "https://github.com/jubalslone/Beeftext";
+QString const kGettingStartedUrl = "https://github.com/jubalslone/Beeftext";
+QString const kBeeftextWikiVariablesUrl = "https://github.com/jubalslone/Beeftext";
+QString const kBeeftextReleasesPagesUrl = "https://github.com/jubalslone/Beeftext/releases";
+QString const kBeeftextIssueTrackerUrl = "https://github.com/jubalslone/Beeftext/issues";
 QString const backupFileExtension = "btbackup";
 QString const kKeyVariableRegExpStr(R"(#{key:(\w+)(?>:(\d+))?})");
 QString const kShortcutVariableRegExpStr(R"(#{shortcut:(.+)})");

@@ -13,7 +13,6 @@
 #include "MatchingMode.h"
 #include "CaseSensitivity.h"
 #include "BeeftextUtils.h"
-#include "BeeftextConstants.h"
 #include "Group/GroupDialog.h"
 #include "Preferences/PreferencesManager.h"
 #include <XMiLib/Exception.h>
@@ -27,9 +26,8 @@ namespace {
 //****************************************************************************************************************************************************
 QString variablesLabel() {
     return QObject::tr(R"(
-      <html><head/><body><p><a href="https://github.com/xmichelo/Beeftext/wiki/Variables">
-      <span style=" text-decoration: underline; color:#%1;">
-      About variables</span></a></p></body></html>)").arg(colorToHex(constants::blueBeeftextColor, false));
+      <html><head/><body><p><a href="https://github.com/jubalslone/Beeftext">
+      About variables</a></p></body></html>)");
 }
 
 

@@ -1,24 +1,21 @@
-/* This file contains the only style applied when custom theme is disabled */
+/*****************************************************************************
+ * Native/system theme.
+ *
+ * The frameless combo picker needs an explicit frame; its colors come from
+ * the active system palette. All normal widgets remain completely native.
+ *****************************************************************************/
 
-/*****************************
-* ComboPickerWindow
-*****************************/
 #frameTopLevel {
-   border: 1px solid #ccc;
-   background-color: #ffffff;
+    border: 1px solid palette(mid);
+    background-color: palette(window);
 }
 
-
-#editSearch {
-   border: 1px solid #ccc;
+#editSearch,
+#listViewResults {
+    border: 1px solid palette(mid);
+    background-color: palette(base);
 }
 
 #labelLogo {
-   background-color: transparent;
-}
-
-#listViewResults
-{
-   border: 1px solid #ccc;
-   text: #fff;
+    background-color: transparent;
 }

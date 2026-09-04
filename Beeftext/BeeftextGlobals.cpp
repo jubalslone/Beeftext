@@ -320,9 +320,7 @@ QString emojiExcludedAppsFilePath() {
 /// \return the color of disabled items in tables and list views.
 //****************************************************************************************************************************************************
 QColor disabledTextColorInTablesAndLists() {
-    PreferencesManager const &prefs = PreferencesManager::instance();
-    return (prefs.useCustomTheme() && (ETheme::Dark == prefs.theme())) ? QColor(0x55, 0x55, 0x55)
-                                                                       : QColor(0xa0, 0xa0, 0xa0);
+    return qApp->palette().color(QPalette::Disabled, QPalette::Text);
 }
 
 
