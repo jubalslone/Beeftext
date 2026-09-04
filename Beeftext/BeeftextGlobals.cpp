@@ -328,15 +328,7 @@ QColor disabledTextColorInTablesAndLists() {
 /// \return The filter for the backup files dialog.
 //****************************************************************************************************************************************************
 QString backupFileDialogFilter() {
-    return QObject::tr("Beeftext backup files (*.%1);;All files (*.*)").arg(constants::backupFileExtension);
-}
-
-
-//****************************************************************************************************************************************************
-/// \return The filter for the JSON files dialog.
-//****************************************************************************************************************************************************
-QString jsonFileDialogFilter() {
-    return QObject::tr("JSON files (*.json);;All files (*.*)");
+    return QObject::tr("Combo backup files (*.%1);;All files (*.*)").arg(constants::backupFileExtension);
 }
 
 

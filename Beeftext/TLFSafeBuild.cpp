@@ -8,7 +8,6 @@
 #include "TLFSafeBuild.h"
 
 #include <QChar>
-#include <QJsonObject>
 #include <QRegularExpression>
 #include <QSettings>
 #include <limits>
@@ -186,19 +185,6 @@ bool readAllowRealLineBreaksInSnippets(QSettings const &settings) {
 
 void writeAllowRealLineBreaksInSnippets(QSettings &settings, bool value) {
     settings.setValue(QString::fromLatin1(kAllowRealLineBreaksInSnippetsSettingKey), value);
-}
-
-
-void exportAllowRealLineBreaksInSnippets(QSettings const &settings, QJsonObject &object) {
-    object[QString::fromLatin1(kAllowRealLineBreaksInSnippetsSettingKey)] =
-        readAllowRealLineBreaksInSnippets(settings);
-}
-
-
-void importAllowRealLineBreaksInSnippets(QJsonObject const &object, QSettings &settings) {
-    QJsonValue const value = object.value(QString::fromLatin1(kAllowRealLineBreaksInSnippetsSettingKey));
-    writeAllowRealLineBreaksInSnippets(settings,
-        value.isBool() ? value.toBool() : kDefaultAllowRealLineBreaksInSnippets);
 }
 
 

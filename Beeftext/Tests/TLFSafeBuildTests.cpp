@@ -9,7 +9,6 @@
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
-#include <QJsonObject>
 #include <QSettings>
 #include <QStringList>
 #include <QTemporaryDir>
@@ -261,20 +260,6 @@ void testMultilinePreferencePersistence() {
         QSettings reloaded(settingsPath, QSettings::IniFormat);
         expect(tlf::readAllowRealLineBreaksInSnippets(reloaded),
                "multiline preference survives a settings reload");
-
-        QJsonObject exported;
-        tlf::exportAllowRealLineBreaksInSnippets(reloaded, exported);
-        expect(exported.value(QString::fromLatin1(tlf::kAllowRealLineBreaksInSnippetsSettingKey)).toBool(),
-               "multiline preference is included in preference export");
-
-        tlf::writeAllowRealLineBreaksInSnippets(reloaded, false);
-        tlf::importAllowRealLineBreaksInSnippets(exported, reloaded);
-        expect(tlf::readAllowRealLineBreaksInSnippets(reloaded),
-               "multiline preference is restored from preference import");
-
-        tlf::importAllowRealLineBreaksInSnippets(QJsonObject(), reloaded);
-        expect(!tlf::readAllowRealLineBreaksInSnippets(reloaded),
-               "older preference imports without the setting remain fail-closed");
 
         reloaded.setValue(QString::fromLatin1(tlf::kAllowRealLineBreaksInSnippetsSettingKey),
                           "not-a-boolean");

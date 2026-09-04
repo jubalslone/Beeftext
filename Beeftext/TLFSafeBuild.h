@@ -3,7 +3,6 @@
 
 #include <QString>
 
-class QJsonObject;
 class QSettings;
 
 namespace constants {
@@ -47,8 +46,6 @@ QString sanitizeText(QString const &text, bool allowRealLineBreaks = false);
 RestrictedSnippet prepareSnippet(QString const &text, bool allowRealLineBreaks = false);
 bool readAllowRealLineBreaksInSnippets(QSettings const &settings);
 void writeAllowRealLineBreaksInSnippets(QSettings &settings, bool value);
-void exportAllowRealLineBreaksInSnippets(QSettings const &settings, QJsonObject &object);
-void importAllowRealLineBreaksInSnippets(QJsonObject const &object, QSettings &settings);
 
 
 } // namespace tlf

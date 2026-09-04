@@ -36,10 +36,6 @@ public: // member functions
     QSettings &settings(); ///< Returns a reference the settings for the application.
     void init() const; ///< Initialize the preferences manager.
     void reset(); ///< Reset the preferences to their default values
-    bool save(QString const &path) const; ///< Save the preference to a JSON file.
-    bool load(QString const &path) const; ///< Load the preference from a JSON file.
-    void toJsonDocument(QJsonDocument &outDoc) const; ///< Copy the preferences to a JSON document.
-    void fromJsonDocument(QJsonDocument const &doc) const; ///< Load the preferences from a JSON document.
     void resetWarnings() const; ///< Reset the warnings
     void setAlreadyLaunched() const; ///< Set the value for the 'First Launch' preference to false
     bool alreadyLaunched() const; ///< Test whether this is the first time the application is launched

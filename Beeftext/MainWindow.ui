@@ -290,38 +290,6 @@
    </hints>
   </connection>
   <connection>
-   <sender>actionBackup</sender>
-   <signal>triggered()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>onActionBackup()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>-1</x>
-     <y>-1</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>331</x>
-     <y>237</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>actionRestore</sender>
-   <signal>triggered()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>onActionRestore()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>-1</x>
-     <y>-1</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>331</x>
-     <y>237</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>actionGenerateCheatSheet</sender>
    <signal>triggered()</signal>
    <receiver>MainWindow</receiver>
@@ -361,8 +329,6 @@
   <slot>onActionShowAboutDialog()</slot>
   <slot>onActionShowPreferencesDialog()</slot>
   <slot>onActionOpenLogFile()</slot>
-  <slot>onActionBackup()</slot>
-  <slot>onActionRestore()</slot>
   <slot>onActionGenerateCheatSheet()</slot>
   <slot>onActionShowLogWindow()</slot>
  </slots>

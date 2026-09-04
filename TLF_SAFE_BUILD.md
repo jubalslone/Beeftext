@@ -25,7 +25,7 @@ Preferences > Behavior provides two **Multiline snippets** modes:
 - **Show line breaks as visible `\n` text** is the default. It preserves the behavior of earlier Lean Beeftext builds and prevents a snippet line break from affecting the target application.
 - **Allow real line breaks** is an opt-in compatibility mode for ordinary multiline Beeftext snippets. CR, LF, and CRLF are normalized to one logical line break. Repeated and trailing line breaks are preserved.
 
-The persisted setting key is `AllowRealLineBreaksInSnippets`. Missing or invalid values—including preference files exported by earlier Lean builds—select the visible-`\n` default.
+The persisted setting key is `AllowRealLineBreaksInSnippets`. Missing or invalid stored values select the visible-`\n` default.
 
 Upstream Beeftext normally normalizes line endings to CRLF and pastes the snippet. Its typing fallback generates an unmodified Return for each LF because Windows Unicode input does not reliably create a line break in common targets. Lean Beeftext never restores the clipboard path. In compatibility mode, only a normalized line break in the fully evaluated text may generate an unmodified Return; `#{key:enter}`, shortcut, delay, and other control syntax remain literal. Windows controls cannot distinguish that Return from a user pressing Enter, so a real line break may submit a single-line form. Enable compatibility mode only where that behavior is acceptable.
 
@@ -41,7 +41,7 @@ Windows 11 Notepad may corrupt rapid `KEYEVENTF_UNICODE` input while its spellch
 
 ## Portable data boundary
 
-The packaged build contains `Portable.bin`. In portable mode, settings, combos, logs, and backups live under the package-local `Data` folder. The combo-list and custom-backup location controls are unavailable, imported preferences cannot redirect either path, and updater cleanup cannot delete a path from old settings.
+The packaged build contains `Portable.bin`. In portable mode, settings, combos, logs, and backups live under the package-local `Data` folder. The combo-list and custom-backup location controls are unavailable, and updater cleanup cannot delete a path from old settings.
 
 ## Updates and builds
 
@@ -57,7 +57,7 @@ The light and dark themes use Qt palettes for their surface, text, selection, li
 
 The selected application theme also sets Qt's application color-scheme hint. This keeps main-window, group, combo, dynamically created, and tray popup menus aligned with Beeftext's explicit Light or Dark choice even when it differs from the Windows theme, without replacing native menu metrics or interaction behavior.
 
-User-facing backup and restore commands protect combo data only. **File > Back Up Combos…** and **File > Restore Combos…** retain the existing `.btbackup` format and behavior; **Preferences > Advanced > Automatic combo backup** controls the existing scheduled combo backups. Preferences continue to persist automatically, and the underlying preference persistence and serialization machinery remains intact for internal use.
+Backup and restore commands protect combo data only. **File > Back Up Combos…** and **File > Restore Combos…** retain the existing `.btbackup` format and behavior; **Preferences > Advanced > Automatic combo backup** controls the existing scheduled combo backups. Preferences continue to persist automatically through the normal settings store. Lean Beeftext contains no Preferences export/import UI or JSON settings-backup code path.
 
 Help, documentation, variables, import-format, translation-help, issue, release, and project-source links for this restricted build point to `https://github.com/jubalslone/Beeftext`. Until Lean-specific documentation pages are published there, general documentation links intentionally open the repository root rather than upstream instructions that describe unavailable features. Links to upstream Beeftext remain only when explicitly labeled as attribution or legacy compatibility information.
 
@@ -78,7 +78,7 @@ The pre-documentation build deliberately omits **Getting Started**, because it h
 11. Restart after changing the multiline preference and confirm `Data/Settings.ini` contains the persisted setting and all application data remains under `Data`.
 12. At Windows display scaling 100%, 125%, and 150%, open every Preferences pane in both the light and dark themes. Check every checkbox, radio button, combo box, shortcut field, spin box, and button—especially Combos defaults/manual shortcuts and Advanced delay/Restore Combo Backup—for complete text, unmistakable checked state, distinct enabled/disabled state, clear selection, and visible keyboard focus. Confirm there are no Preferences Export or Import buttons. If Windows text size is separately enlarged, repeat at that setting.
 13. With Windows Dark, select Beeftext Light; with Windows Light, select Beeftext Dark. In each combination, inspect File, Groups, Combos, Advanced, Help, dynamic/context, and tray menus. Confirm the Beeftext theme wins and normal, hovered/selected, disabled, separator, shortcut, and keyboard-focus states remain readable and distinct.
-14. Confirm File contains **Back Up Combos…** and **Restore Combos…**, Advanced no longer contains those commands, and actual backup/restore behavior is unchanged. Confirm Advanced Preferences says **Automatic combo backup** and **Restore Combo Backup…**.
+14. Confirm File contains **Back Up Combos…** and **Restore Combos…**, Advanced no longer contains those commands, and the file dialogs are titled **Back Up Combos** and **Restore Combos**. Save a backup with the **Combo backup files (`*.btbackup`)** filter, inspect a copy, and confirm its root contains `fileFormatVersion`, `groups`, and `combos` rather than application settings. Restore it and confirm the replacement warning appears. Confirm Advanced Preferences says **Automatic combo backup** and **Restore Combo Backup…**.
 15. Open Project Documentation, Release Notes, Report Bug, every About-dialog link, About Variables link, Supported file formats link, and Other languages link. Confirm Lean project/help links use `jubalslone/Beeftext`; confirm every retained upstream link is visibly labeled as upstream attribution or legacy Beeftext v7.2. Confirm Help has no Getting Started item and About remains intentionally unbranded for this pass.
 16. Close the main window and confirm the tray app remains running. Then choose **Exit** and confirm `Beeftext.exe` terminates.
 17. With a network monitor if available, launch the app and open Preferences. Confirm there is no request to the Beeftext update service.
