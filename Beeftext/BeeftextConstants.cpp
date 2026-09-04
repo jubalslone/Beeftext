@@ -18,7 +18,6 @@ xmilib::VersionNumber const kVersionNumber(16, 0);
 QString const kApplicationName = "Beeftext";
 QString const kOrganizationName = "beeftext.org";
 QString const kBeeftextWikiHomeUrl = "https://github.com/jubalslone/Beeftext";
-QString const kGettingStartedUrl = "https://github.com/jubalslone/Beeftext";
 QString const kBeeftextWikiVariablesUrl = "https://github.com/jubalslone/Beeftext";
 QString const kBeeftextReleasesPagesUrl = "https://github.com/jubalslone/Beeftext/releases";
 QString const kBeeftextIssueTrackerUrl = "https://github.com/jubalslone/Beeftext/issues";

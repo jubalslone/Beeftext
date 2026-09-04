@@ -33,8 +33,6 @@ private slots:
     void onResetToDefaultValues(); ///< Slot for the 'Reset to default values' action.
     void onResetWarnings(); ///< Slot for the 'Reset warnings' action.
     void onClose(); ///< Slot for the OK button.
-    void onExport(); ///< Slot for the 'Export' button.
-    void onImport(); ///< Slot for the 'Import' button.
 
 private: // member functions
     bool validateInput(); ///< Check that the values for the dialog are consistent.
@@ -43,7 +41,6 @@ private: // member functions
 private: // data members
     Ui::PreferencesDialog ui_ {}; ///< The GUI for the dialog.
     PreferencesManager &prefs_; ///< The preferences manager.
-    QString previousComboListPath_; ///< The previous path of the combo list.
     QList<PrefPane *> panes_; ///< The preference panes.
 };
 

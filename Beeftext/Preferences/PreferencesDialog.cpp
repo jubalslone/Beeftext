@@ -9,7 +9,6 @@
 
 #include "stdafx.h"
 #include "PreferencesDialog.h"
-#include "BeeftextGlobals.h"
 #include <XMiLib/XMiLibConstants.h>
 #include <QAbstractSpinBox>
 #include <QComboBox>
@@ -20,9 +19,6 @@
 
 
 namespace {
-
-
-QString const kExportFileName = "BeeftextPrefs.json"; ///< The default file name for export/import of preferences.
 
 
 template<typename StyleOption>
@@ -63,8 +59,6 @@ PreferencesDialog::PreferencesDialog(QWidget *parent)
     ui_.setupUi(this);
 
     connect(ui_.buttonResetWarnings, &QPushButton::clicked, this, &PreferencesDialog::onResetWarnings);
-    connect(ui_.buttonImport, &QPushButton::clicked, this, &PreferencesDialog::onImport);
-    connect(ui_.buttonExport, &QPushButton::clicked, this, &PreferencesDialog::onExport);
     connect(ui_.buttonDefaults, &QPushButton::clicked, this, &PreferencesDialog::onResetToDefaultValues);
     connect(ui_.buttonClose, &QPushButton::clicked, this, &PreferencesDialog::onClose);
 
@@ -122,7 +116,6 @@ void PreferencesDialog::onResetToDefaultValues() {
                                                                                     "the preferences to their default values?"), QMessageBox::Yes | QMessageBox::No, QMessageBox::No))
         return;
 
-    previousComboListPath_ = prefs_.comboListFolderPath();
     prefs_.reset();
     this->load();
 }
@@ -144,29 +137,4 @@ void PreferencesDialog::onResetWarnings() {
 void PreferencesDialog::onClose() {
     if (this->validateInput())
         this->close();
-}
-
-
-//****************************************************************************************************************************************************
-//
-//****************************************************************************************************************************************************
-void PreferencesDialog::onExport() {
-    QString const path = QFileDialog::getSaveFileName(this, tr("Export Preferences"), QDir(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation)).absoluteFilePath(kExportFileName), globals::jsonFileDialogFilter());
-    if (path.isEmpty())
-        return;
-    if (!prefs_.save(path))
-        QMessageBox::critical(this, tr("Error"), tr("An error occurred while exporting the preferences."));
-}
-
-
-//****************************************************************************************************************************************************
-//
-//****************************************************************************************************************************************************
-void PreferencesDialog::onImport() {
-    QString const path = QFileDialog::getOpenFileName(this, tr("Import Preferences"), QDir(QStandardPaths::writableLocation(QStandardPaths::DesktopLocation)).absoluteFilePath(kExportFileName), globals::jsonFileDialogFilter());
-    if (path.isEmpty())
-        return;
-    if (!prefs_.load(path))
-        QMessageBox::critical(this, tr("Error"), tr("An error occurred while importing the preferences."));
-    this->load();
 }

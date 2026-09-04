@@ -178,7 +178,7 @@
    <item>
     <widget class="QGroupBox" name="groupboxAutoBackup">
      <property name="title">
-      <string>Automatic backup</string>
+      <string>Automatic combo backup</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_2">
       <item>
@@ -193,10 +193,10 @@
         <item>
          <widget class="QPushButton" name="buttonRestoreBackup">
           <property name="toolTip">
-           <string>Restore a backup.</string>
+           <string>Restore combos from an automatic backup.</string>
           </property>
           <property name="text">
-           <string>&amp;Restore</string>
+           <string>&amp;Restore Combo Backup…</string>
           </property>
          </widget>
         </item>

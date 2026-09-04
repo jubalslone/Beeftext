@@ -213,32 +213,6 @@
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
-      <widget class="QPushButton" name="buttonExport">
-       <property name="toolTip">
-        <string>Export the preferences.</string>
-       </property>
-       <property name="text">
-        <string>&amp;Export</string>
-       </property>
-       <property name="autoDefault">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="buttonImport">
-       <property name="toolTip">
-        <string>Import the preferences.</string>
-       </property>
-       <property name="text">
-        <string>&amp;Import</string>
-       </property>
-       <property name="autoDefault">
-        <bool>false</bool>
-       </property>
-      </widget>
-     </item>
-     <item>
       <widget class="QPushButton" name="buttonDefaults">
        <property name="toolTip">
         <string>Reset the preferences to their default values.</string>
@@ -324,8 +298,6 @@
   </customwidget>
  </customwidgets>
  <tabstops>
-  <tabstop>buttonExport</tabstop>
-  <tabstop>buttonImport</tabstop>
   <tabstop>buttonDefaults</tabstop>
   <tabstop>buttonResetWarnings</tabstop>
   <tabstop>buttonClose</tabstop>

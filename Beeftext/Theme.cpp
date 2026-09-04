@@ -11,6 +11,7 @@
 #include "Theme.h"
 #include "BeeftextGlobals.h"
 #include <XMiLib/Exception.h>
+#include <QStyleHints>
 
 
 QString loadStylesheetFile(QString const &path); ///< Load a stylesheet from file. The function throws an exception if an error occur.
@@ -22,6 +23,20 @@ namespace {
 QPalette const &nativeApplicationPalette() {
     static QPalette const palette = qApp->palette();
     return palette;
+}
+
+
+void applyApplicationColorScheme(bool useCustomTheme, ETheme theme) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    QStyleHints *styleHints = QGuiApplication::styleHints();
+    if (useCustomTheme)
+        styleHints->setColorScheme((ETheme::Dark == theme) ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light);
+    else
+        styleHints->unsetColorScheme();
+#else
+    Q_UNUSED(useCustomTheme)
+    Q_UNUSED(theme)
+#endif
 }
 
 
@@ -179,6 +194,7 @@ ETheme selectedThemeInCombo(QComboBox const &combo) {
 //****************************************************************************************************************************************************
 void applyThemePreferences(bool useCustomTheme, ETheme theme) {
     try {
+        applyApplicationColorScheme(useCustomTheme, theme);
         if (!useCustomTheme) {
             qApp->setPalette(nativeApplicationPalette());
             qApp->setStyleSheet(loadStylesheetFile(":/MainWindow/Resources/StyleNoCustom.qss"));
@@ -194,6 +210,7 @@ void applyThemePreferences(bool useCustomTheme, ETheme theme) {
         QString const &msg = e.qwhat();
         if (!msg.isEmpty())
             globals::debugLog().addWarning(msg);
+        applyApplicationColorScheme(false, ETheme::Light);
         qApp->setPalette(nativeApplicationPalette());
         qApp->setStyleSheet(QString());
     }
