@@ -37,11 +37,13 @@ private slots:
 private: // member functions
     bool validateInput(); ///< Check that the values for the dialog are consistent.
     void changeEvent(QEvent *) override; ///< Change event handler.
+    void updateComfortableLayout(bool resizeToMinimum); ///< Refresh font-aware spacing and the dialog minimum size.
 
 private: // data members
     Ui::PreferencesDialog ui_ {}; ///< The GUI for the dialog.
     PreferencesManager &prefs_; ///< The preferences manager.
     QList<PrefPane *> panes_; ///< The preference panes.
+    QSize baseMinimumSize_; ///< Minimum size declared by the UI before content-aware sizing.
 };
 
 
