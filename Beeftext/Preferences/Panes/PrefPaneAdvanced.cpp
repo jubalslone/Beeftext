@@ -10,10 +10,9 @@
 #include "stdafx.h"
 #include "PrefPaneAdvanced.h"
 #include "Combo/ComboManager.h"
-#include "Backup/BackupRestoreDialog.h"
-#include "Backup/BackupManager.h"
 #include "BeeftextGlobals.h"
 #include "BeeftextUtils.h"
+#include "BeeftextConstants.h"
 #include <XMiLib/Exception.h>
 
 
@@ -24,25 +23,24 @@ PrefPaneAdvanced::PrefPaneAdvanced(QWidget *parent)
     : PrefPane(parent)
     , prefs_(PreferencesManager::instance()) {
     ui_.setupUi(this);
+    if (constants::kRestrictedBuild) {
+        ui_.checkUseCustomPowershellVersion->setVisible(false);
+        ui_.editCustomPowerShellPath->setVisible(false);
+        ui_.buttonChangeCustomPowershellVersion->setVisible(false);
+    }
     ui_.spinDelayBetweenKeystrokes->setRange(PreferencesManager::minDelayBetweenKeystrokesMs(), PreferencesManager::maxDelayBetweenKeystrokesMs());
-    if (isInPortableMode())
+    if (isInPortableMode()) {
         ui_.frameComboListFolder->setVisible(false);
-
-    // We update the GUI when the combo list is saved to properly enable/disable the 'Restore Backup' button
-    connect(&ComboManager::instance(), &ComboManager::comboListWasSaved, this, &PrefPaneAdvanced::updateGui);
+    }
 
     connect(ui_.buttonChangeComboListFolder, &QPushButton::clicked, this, &PrefPaneAdvanced::onChangeComboListFolder);
-    connect(ui_.buttonChangeCustomBackupLocation, &QPushButton::clicked, this, &PrefPaneAdvanced::onChangeCustomBackupLocation);
     connect(ui_.buttonChangeCustomPowershellVersion, &QPushButton::clicked, this, &PrefPaneAdvanced::onChangeCustomPowershellVersion);
     connect(ui_.buttonChangeComboListFolder, &QPushButton::clicked, this, &PrefPaneAdvanced::onChangeComboListFolder);
     connect(ui_.buttonExcludedApplications, &QPushButton::clicked, this, &PrefPaneAdvanced::onEditExcludedApplications);
     connect(ui_.buttonOpenComboListFolder, &QPushButton::clicked, this, &PrefPaneAdvanced::onOpenComboListFolder);
     connect(ui_.buttonResetComboListFolder, &QPushButton::clicked, this, &PrefPaneAdvanced::onResetComboListFolder);
-    connect(ui_.buttonRestoreBackup, &QPushButton::clicked, this, &PrefPaneAdvanced::onRestoreBackup);
     connect(ui_.buttonSensitiveApplications, &QPushButton::clicked, this, &PrefPaneAdvanced::onEditSensitiveApplications);
-    connect(ui_.checkAutoBackup, &QCheckBox::toggled, this, &PrefPaneAdvanced::onCheckAutoBackup);
     connect(ui_.checkRestoreClipboardAfterSubstitution, &QCheckBox::toggled, this, &PrefPaneAdvanced::onCheckRestoreClipboardAfterSubstitution);
-    connect(ui_.checkUseCustomBackupLocation, &QCheckBox::toggled, this, &PrefPaneAdvanced::onCheckUseCustomBackupLocation);
     connect(ui_.checkUseCustomPowershellVersion, &QCheckBox::toggled, this, &PrefPaneAdvanced::onCheckUseCustomPowerShellVersion);
     connect(ui_.checkUseLegacyCopyPaste, &QCheckBox::toggled, this, &PrefPaneAdvanced::onCheckUseLegacyCopyPaste);
     connect(ui_.checkUseShiftInsertForPasting, &QCheckBox::toggled, this, &PrefPaneAdvanced::onCheckUseShiftInsertForPasting);
@@ -69,13 +67,9 @@ void PrefPaneAdvanced::load() const {
     blocker = QSignalBlocker(ui_.checkUseShiftInsertForPasting);
     ui_.checkUseShiftInsertForPasting->setChecked(prefs_.useShiftInsertForPasting());
     blocker = QSignalBlocker(ui_.checkUseCustomPowershellVersion);
-    ui_.checkUseCustomPowershellVersion->setChecked(prefs_.useCustomPowershellVersion());
+    ui_.checkUseCustomPowershellVersion->setChecked(constants::kRestrictedBuild ? false : prefs_.useCustomPowershellVersion());
     blocker = QSignalBlocker(ui_.editCustomPowerShellPath);
-    ui_.editCustomPowerShellPath->setText(QDir::toNativeSeparators(prefs_.customPowershellPath()));
-    ui_.checkAutoBackup->setChecked(prefs_.autoBackup());
-    blocker = QSignalBlocker(ui_.checkUseCustomBackupLocation);
-    ui_.checkUseCustomBackupLocation->setChecked(prefs_.useCustomBackupLocation());
-    ui_.editCustomBackupLocation->setText(QDir::toNativeSeparators(prefs_.customBackupLocation()));
+    ui_.editCustomPowerShellPath->setText(constants::kRestrictedBuild ? QString() : QDir::toNativeSeparators(prefs_.customPowershellPath()));
 #pragma clang diagnostic pop
 
     this->updateGui();
@@ -86,13 +80,9 @@ void PrefPaneAdvanced::load() const {
 //
 //****************************************************************************************************************************************************
 void PrefPaneAdvanced::updateGui() const {
-    bool const customPowershell = ui_.checkUseCustomPowershellVersion->isChecked();
+    bool const customPowershell = !constants::kRestrictedBuild && ui_.checkUseCustomPowershellVersion->isChecked();
     ui_.editCustomPowerShellPath->setEnabled(customPowershell);
     ui_.buttonChangeCustomPowershellVersion->setEnabled(customPowershell);
-    ui_.buttonRestoreBackup->setEnabled(BackupManager::instance().backupFileCount());
-    QWidgetList widgets = { ui_.editCustomBackupLocation, ui_.buttonChangeCustomBackupLocation };
-    for (QWidget *widget: widgets)
-        widget->setEnabled(prefs_.useCustomBackupLocation());
 }
 
 
@@ -216,6 +206,11 @@ void PrefPaneAdvanced::onCheckUseShiftInsertForPasting(bool checked) const {
 /// \param[in] checked Is the check box checked.
 //****************************************************************************************************************************************************
 void PrefPaneAdvanced::onCheckUseCustomPowerShellVersion(bool checked) {
+    if (constants::kRestrictedBuild) {
+        QSignalBlocker blocker(ui_.checkUseCustomPowershellVersion);
+        ui_.checkUseCustomPowershellVersion->setChecked(false);
+        return;
+    }
     if (checked) {
         QString const path = prefs_.customPowershellPath();
         QFileInfo const fi(path);
@@ -236,58 +231,14 @@ void PrefPaneAdvanced::onCheckUseCustomPowerShellVersion(bool checked) {
 //
 //****************************************************************************************************************************************************
 void PrefPaneAdvanced::onChangeCustomPowershellVersion() {
+    if (constants::kRestrictedBuild)
+        return;
     QString const path = QFileDialog::getOpenFileName(this, tr("Select PowerShell executable"), QString(), tr("Executable files (*.exe);;All files (*.*)"));
     if (path.isEmpty())
         return;
     prefs_.setCustomPowershellPath(path);
     QSignalBlocker blocker(ui_.editCustomPowerShellPath);
     ui_.editCustomPowerShellPath->setText(QDir::toNativeSeparators(path));
-}
-
-
-//****************************************************************************************************************************************************
-/// \param[in] value Is the radio button checked?
-//****************************************************************************************************************************************************
-void PrefPaneAdvanced::onCheckAutoBackup(bool value) {
-    if (!value) {
-        if (!this->promptForAndRemoveAutoBackups()) // did the user cancel?
-        {
-            QSignalBlocker const blocker(ui_.checkAutoBackup);
-            ui_.checkAutoBackup->setChecked(true);
-        }
-    }
-    prefs_.setAutoBackup(value);
-    this->updateGui();
-}
-
-
-//****************************************************************************************************************************************************
-/// \param[in] value The check state of the box.
-//****************************************************************************************************************************************************
-void PrefPaneAdvanced::onCheckUseCustomBackupLocation(bool value) const {
-    prefs_.setUseCustomBackupLocation(value);
-    this->updateGui();
-}
-
-
-//****************************************************************************************************************************************************
-//
-//****************************************************************************************************************************************************
-void PrefPaneAdvanced::onChangeCustomBackupLocation() {
-    QString const path = QFileDialog::getExistingDirectory(this, tr("Custom backup location"), prefs_.customBackupLocation());
-    if (path.isEmpty())
-        return;
-    ui_.editCustomBackupLocation->setText(QDir::toNativeSeparators(path));
-    prefs_.setCustomBackupLocation(path);
-
-}
-
-
-//****************************************************************************************************************************************************
-// 
-//****************************************************************************************************************************************************
-void PrefPaneAdvanced::onRestoreBackup() {
-    BackupRestoreDialog::run(this);
 }
 
 
@@ -314,20 +265,4 @@ void PrefPaneAdvanced::changeEvent(QEvent *event) {
     if (QEvent::LanguageChange == event->type())
         ui_.retranslateUi(this);
     PrefPane::changeEvent(event);
-}
-
-
-//****************************************************************************************************************************************************
-/// \return true if the used picked Yes or No
-/// \return false if the user selected Cancel
-//****************************************************************************************************************************************************
-bool PrefPaneAdvanced::promptForAndRemoveAutoBackups() {
-    BackupManager const &backupManager = BackupManager::instance();
-    qint32 const reply = QMessageBox::question(this, tr("Delete Backup Files?"), tr("Do you want to delete all the "
-                                                                                    "backup files?"), QMessageBox::StandardButtons(QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel), QMessageBox::No);
-    if (QMessageBox::Cancel == reply)
-        return false;
-    if (QMessageBox::Yes == reply)
-        backupManager.removeAllBackups();
-    return true;
 }

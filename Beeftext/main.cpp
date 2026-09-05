@@ -85,7 +85,8 @@ int main(int argc, char *argv[]) {
         debugLog.addInfo(QString("%1 started.").arg(constants::kApplicationName));
         debugLog.addInfo(QString("Build info: %1").arg(globals::getBuildInfo()));
         applyAutostartParameters();
-        removeFileMarkedForDeletion();
+        if constexpr (!constants::kRestrictedBuild)
+            removeFileMarkedForDeletion();
 
         // if necessary warn about deprecated rich text support and offer an exit option.
         if (prefs.alreadyLaunched() && (!prefs.alreadyConvertedRichTextCombos()) &&
@@ -104,13 +105,8 @@ int main(int argc, char *argv[]) {
         // QWindowsWindowFunctions::setWindowActivationBehavior(QWindowsWindowFunctions::AlwaysActivateWindow);
         ensureMainWindowHasAHandle(window);
 
-        if (!prefs.alreadyLaunched()) {
+        if (!prefs.alreadyLaunched())
             window.show();
-            if ((!PreferencesManager::instance().alreadyLaunched()) && (QMessageBox::Yes == QMessageBox::information(
-                &window, QObject::tr("Getting Started"), QObject::tr("New to Beeftext?\n\nDo you want to read a short "
-                                                                     "'Getting Started' tutorial?"), QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes)))
-                QDesktopServices::openUrl(QUrl(constants::kGettingStartedUrl));
-        }
         QObject::connect(&singleInstanceApp, &SingleInstanceApplication::anotherInstanceWasLaunched, &window, &MainWindow::onAnotherAppInstanceLaunch);
         prefs.setAlreadyLaunched();
         setupPickerWindowShortcut();

@@ -1,0 +1,304 @@
+name: Windows portable build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and test Beeftext TLF Safe
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out exact source commit and submodules
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify source identity and cleanliness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = '${{ github.event.pull_request.head.sha || github.sha }}'
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $expected) {
+            throw "Checked out $actual, expected $expected."
+          }
+
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The checked-out source tree has unstaged tracked changes.'
+          }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The checked-out source tree has staged changes.'
+          }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) {
+            throw 'A submodule has unstaged tracked changes.'
+          }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The checked-out source tree or a submodule is dirty.'
+          }
+
+      - name: Install Qt 6.8 LTS
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.8.*'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+          setup-python: true
+
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+
+      - name: Build Release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $buildOutput = @(& cmake --build build --config Release --parallel -- /nologo /verbosity:minimal 2>&1)
+          $exitCode = $LASTEXITCODE
+          $buildOutput | ForEach-Object { $_.ToString() } | Set-Content -Path build-output.log
+
+          if ($exitCode -ne 0) {
+            Write-Host '::group::Filtered compiler diagnostics'
+            $diagnostics = $buildOutput |
+              ForEach-Object { $_.ToString() } |
+              Select-String -Pattern '(?i)(fatal error|error C\d+|error LNK\d+|error MSB\d+|CMake Error|FAILED:|cannot open|not found|undefined reference)'
+
+            if ($diagnostics) {
+              $diagnostics | ForEach-Object { Write-Host $_.Line }
+            }
+            else {
+              Write-Host 'No standard error pattern matched. Showing the final 150 build lines:'
+              $buildOutput | Select-Object -Last 150 | ForEach-Object { Write-Host $_.ToString() }
+            }
+            Write-Host '::endgroup::'
+            exit $exitCode
+          }
+
+          $buildOutput | Select-Object -Last 40 | ForEach-Object { Write-Host $_.ToString() }
+
+      - name: Run restricted-build tests
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C Release --output-on-failure 2>&1 | Tee-Object -FilePath test-output.log
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Verify build did not rewrite tracked source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The build modified the source worktree.'
+          }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The build staged source changes.'
+          }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The build modified a submodule worktree.'
+          }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The build modified tracked source files.'
+          }
+
+      - name: Upload failed build or test log
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Beeftext-TLF-Safe-build-log
+          path: |
+            build-output.log
+            test-output.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Assemble portable package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Start-Transcript -Path package-output.log -Force
+          try {
+            $exe = Get-ChildItem -Path build -Recurse -File -Filter Beeftext.exe |
+              Where-Object { $_.FullName -match '[\\/]Release[\\/]' } |
+              Select-Object -First 1
+
+            if (-not $exe) {
+              Write-Host 'Build output:'
+              Get-ChildItem -Path build -Recurse -File | Select-Object FullName
+              throw 'Could not locate the Release Beeftext.exe.'
+            }
+            Write-Host "Executable: $($exe.FullName)"
+
+            $package = Join-Path $PWD 'artifact/Beeftext-TLF-Safe'
+            New-Item -ItemType Directory -Path $package -Force | Out-Null
+            Copy-Item -Path $exe.FullName -Destination $package
+
+            $translationDir = Join-Path $exe.DirectoryName 'translations'
+            if (Test-Path $translationDir) {
+              Copy-Item -Path $translationDir -Destination $package -Recurse
+            }
+
+            & windeployqt --release --compiler-runtime --dir $package (Join-Path $package 'Beeftext.exe')
+            if ($LASTEXITCODE -ne 0) {
+              throw "windeployqt failed with exit code $LASTEXITCODE."
+            }
+
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+            $vsInstall = & $vswhere -latest -products * -property installationPath
+            if (-not $vsInstall) {
+              throw 'Could not locate the Visual Studio installation.'
+            }
+            Write-Host "Visual Studio installation: $vsInstall"
+
+            $redistRoot = Join-Path $vsInstall 'VC/Redist/MSVC'
+            Write-Host "Visual C++ redist root: $redistRoot"
+            Get-ChildItem -Path $redistRoot -Directory | Select-Object FullName
+
+            $redistVersion = Get-ChildItem -Path $redistRoot -Directory |
+              Where-Object { $_.Name -match '^\d+(\.\d+)+$' } |
+              Sort-Object { [version]$_.Name } -Descending |
+              Select-Object -First 1
+            if (-not $redistVersion) {
+              throw "Could not locate a numeric Visual C++ runtime version under $redistRoot."
+            }
+
+            $x64RedistRoot = Join-Path $redistVersion.FullName 'x64'
+            Write-Host "Visual C++ x64 redist root: $x64RedistRoot"
+            Get-ChildItem -Path $x64RedistRoot -Directory | Select-Object FullName
+
+            $crtDir = Get-ChildItem -Path $x64RedistRoot -Directory -Filter 'Microsoft.VC*.CRT' |
+              Select-Object -First 1
+            if (-not $crtDir) {
+              throw 'Could not locate the x64 Visual C++ runtime directory.'
+            }
+            Write-Host "Visual C++ runtime directory: $($crtDir.FullName)"
+            Copy-Item -Path (Join-Path $crtDir.FullName '*.dll') -Destination $package
+
+            foreach ($runtimeDll in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
+              if (-not (Test-Path (Join-Path $package $runtimeDll))) {
+                throw "The portable package is missing $runtimeDll."
+              }
+            }
+
+            Copy-Item -Path LICENSE -Destination $package
+            Copy-Item -Path TLF_SAFE_BUILD.md -Destination $package
+            Copy-Item -Path ARTIFACT_SIGNING.md -Destination $package
+            New-Item -ItemType File -Path (Join-Path $package 'Portable.bin') -Force | Out-Null
+
+            $qtVersion = (& qmake -query QT_VERSION).Trim()
+            $sourceCommit = (git rev-parse HEAD).Trim()
+            @(
+              "Repository: $env:GITHUB_REPOSITORY"
+              "Source commit: $sourceCommit"
+              "Workflow run: $env:GITHUB_RUN_ID"
+              "Qt version: $qtVersion"
+              "Built UTC: $((Get-Date).ToUniversalTime().ToString('o'))"
+            ) | Set-Content -Path (Join-Path $package 'BUILD_INFO.txt') -Encoding utf8
+
+            $checksumPath = Join-Path $package 'SHA256SUMS.txt'
+            Get-ChildItem -Path $package -Recurse -File |
+              Where-Object { $_.FullName -ne $checksumPath } |
+              Sort-Object FullName |
+              ForEach-Object {
+                $relativePath = [IO.Path]::GetRelativePath($package, $_.FullName).Replace('\', '/')
+                $hash = (Get-FileHash -Path $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$hash  $relativePath"
+              } | Set-Content -Path $checksumPath -Encoding ascii
+
+            Write-Host 'Portable package contents:'
+            Get-ChildItem -Path $package -Recurse | Select-Object FullName, Length
+          }
+          finally {
+            Stop-Transcript
+          }
+
+      - name: Upload failed package log
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Beeftext-TLF-Safe-package-log
+          path: package-output.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify portable provenance and checksums
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $package = Join-Path $PWD 'artifact/Beeftext-TLF-Safe'
+          $sourceCommit = (git rev-parse HEAD).Trim()
+          $buildInfo = Get-Content -LiteralPath (Join-Path $package 'BUILD_INFO.txt') -Raw
+          if ($buildInfo -notmatch "(?m)^Source commit: $([regex]::Escape($sourceCommit))\r?$") {
+            throw 'BUILD_INFO.txt does not identify the exact checked-out source commit.'
+          }
+
+          $checksumPath = Join-Path $package 'SHA256SUMS.txt'
+          $lines = @(Get-Content -LiteralPath $checksumPath)
+          $files = @(Get-ChildItem -Path $package -Recurse -File |
+            Where-Object { $_.FullName -ne $checksumPath })
+          if ($lines.Count -ne $files.Count) {
+            throw "SHA256SUMS.txt has $($lines.Count) entries for $($files.Count) packaged files."
+          }
+
+          $root = [IO.Path]::GetFullPath($package).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+          $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+          foreach ($line in $lines) {
+            if ($line -cnotmatch '^([0-9a-f]{64})  (.+)$') {
+              throw "Malformed SHA256SUMS.txt entry: $line"
+            }
+            $expectedHash = $Matches[1]
+            $relativePath = $Matches[2]
+            if ([IO.Path]::IsPathRooted($relativePath)) {
+              throw "Absolute path in SHA256SUMS.txt: $relativePath"
+            }
+            $fullPath = [IO.Path]::GetFullPath((Join-Path $package $relativePath))
+            if (-not $fullPath.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
+              throw "Path escapes the portable package: $relativePath"
+            }
+            if (-not $seen.Add($relativePath)) {
+              throw "Duplicate SHA256SUMS.txt entry: $relativePath"
+            }
+            if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+              throw "Missing packaged file: $relativePath"
+            }
+            $actualHash = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actualHash -cne $expectedHash) {
+              throw "SHA-256 mismatch for $relativePath."
+            }
+          }
+
+      - name: Upload portable build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Beeftext-TLF-Safe-windows-x64
+          path: artifact/Beeftext-TLF-Safe
+          if-no-files-found: error
+          retention-days: 14

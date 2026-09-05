@@ -31,11 +31,8 @@ AboutDialog::AboutDialog(QWidget *parent)
 // 
 //****************************************************************************************************************************************************
 void AboutDialog::completeText() const {
-    QString const hexColor = colorToHex(constants::blueBeeftextColor, false);
     ui_.labelText->setText(ui_.labelText->text().arg(constants::kVersionNumber.major()).arg(constants::kVersionNumber.minor())
-        .arg(isInPortableMode() ? tr("Portable Edition") : "").arg(QString(__DATE__).right(4))
-        .arg(hexColor));
-    ui_.labelTranslators->setText(ui_.labelTranslators->text().arg(hexColor));
+        .arg(isInPortableMode() ? tr("Portable Edition") : "").arg(QString(__DATE__).right(4)));
     ui_.labelBuildInfo->setText(globals::getBuildInfo());
 }
 

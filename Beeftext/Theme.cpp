@@ -11,9 +11,121 @@
 #include "Theme.h"
 #include "BeeftextGlobals.h"
 #include <XMiLib/Exception.h>
+#include <QStyleHints>
 
 
 QString loadStylesheetFile(QString const &path); ///< Load a stylesheet from file. The function throws an exception if an error occur.
+
+
+namespace {
+
+
+QPalette const &nativeApplicationPalette() {
+    static QPalette const palette = qApp->palette();
+    return palette;
+}
+
+
+void applyApplicationColorScheme(bool useCustomTheme, ETheme theme) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    QStyleHints *styleHints = QGuiApplication::styleHints();
+    if (useCustomTheme)
+        styleHints->setColorScheme((ETheme::Dark == theme) ? Qt::ColorScheme::Dark : Qt::ColorScheme::Light);
+    else
+        styleHints->unsetColorScheme();
+#else
+    Q_UNUSED(useCustomTheme)
+    Q_UNUSED(theme)
+#endif
+}
+
+
+void setPaletteColor(QPalette &palette, QPalette::ColorRole role, QColor const &color) {
+    palette.setColor(role, color);
+}
+
+
+QPalette lightPalette() {
+    QPalette palette = nativeApplicationPalette();
+    setPaletteColor(palette, QPalette::Window, QColor("#f3f3f3"));
+    setPaletteColor(palette, QPalette::WindowText, QColor("#1f1f1f"));
+    setPaletteColor(palette, QPalette::Base, QColor("#ffffff"));
+    setPaletteColor(palette, QPalette::AlternateBase, QColor("#f7f7f7"));
+    setPaletteColor(palette, QPalette::Text, QColor("#1f1f1f"));
+    setPaletteColor(palette, QPalette::Button, QColor("#fbfbfb"));
+    setPaletteColor(palette, QPalette::ButtonText, QColor("#1f1f1f"));
+    setPaletteColor(palette, QPalette::BrightText, QColor("#ffffff"));
+    setPaletteColor(palette, QPalette::Light, QColor("#ffffff"));
+    setPaletteColor(palette, QPalette::Midlight, QColor("#e8e8e8"));
+    setPaletteColor(palette, QPalette::Mid, QColor("#9a9a9a"));
+    setPaletteColor(palette, QPalette::Dark, QColor("#6f6f6f"));
+    setPaletteColor(palette, QPalette::Shadow, QColor("#3f3f3f"));
+    setPaletteColor(palette, QPalette::Highlight, QColor("#0067c0"));
+    setPaletteColor(palette, QPalette::HighlightedText, QColor("#ffffff"));
+    setPaletteColor(palette, QPalette::Link, QColor("#0067c0"));
+    setPaletteColor(palette, QPalette::LinkVisited, QColor("#744da9"));
+    setPaletteColor(palette, QPalette::ToolTipBase, QColor("#ffffff"));
+    setPaletteColor(palette, QPalette::ToolTipText, QColor("#1f1f1f"));
+    setPaletteColor(palette, QPalette::PlaceholderText, QColor("#6b6b6b"));
+#if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
+    setPaletteColor(palette, QPalette::Accent, QColor("#0067c0"));
+#endif
+
+    palette.setColor(QPalette::Disabled, QPalette::WindowText, QColor("#6b6b6b"));
+    palette.setColor(QPalette::Disabled, QPalette::Text, QColor("#6b6b6b"));
+    palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor("#6b6b6b"));
+    palette.setColor(QPalette::Disabled, QPalette::Base, QColor("#e8e8e8"));
+    palette.setColor(QPalette::Disabled, QPalette::Button, QColor("#e5e5e5"));
+    palette.setColor(QPalette::Disabled, QPalette::Highlight, QColor("#b8b8b8"));
+    palette.setColor(QPalette::Disabled, QPalette::HighlightedText, QColor("#6b6b6b"));
+    palette.setColor(QPalette::Disabled, QPalette::Link, QColor("#6b6b6b"));
+    palette.setColor(QPalette::Disabled, QPalette::LinkVisited, QColor("#6b6b6b"));
+    palette.setColor(QPalette::Disabled, QPalette::PlaceholderText, QColor("#858585"));
+    return palette;
+}
+
+
+QPalette darkPalette() {
+    QPalette palette = nativeApplicationPalette();
+    setPaletteColor(palette, QPalette::Window, QColor("#202020"));
+    setPaletteColor(palette, QPalette::WindowText, QColor("#f2f2f2"));
+    setPaletteColor(palette, QPalette::Base, QColor("#2b2b2b"));
+    setPaletteColor(palette, QPalette::AlternateBase, QColor("#323232"));
+    setPaletteColor(palette, QPalette::Text, QColor("#f2f2f2"));
+    setPaletteColor(palette, QPalette::Button, QColor("#333333"));
+    setPaletteColor(palette, QPalette::ButtonText, QColor("#f2f2f2"));
+    setPaletteColor(palette, QPalette::BrightText, QColor("#ffffff"));
+    setPaletteColor(palette, QPalette::Light, QColor("#626262"));
+    setPaletteColor(palette, QPalette::Midlight, QColor("#4a4a4a"));
+    setPaletteColor(palette, QPalette::Mid, QColor("#3d3d3d"));
+    setPaletteColor(palette, QPalette::Dark, QColor("#151515"));
+    setPaletteColor(palette, QPalette::Shadow, QColor("#080808"));
+    setPaletteColor(palette, QPalette::Highlight, QColor("#60cdff"));
+    setPaletteColor(palette, QPalette::HighlightedText, QColor("#111111"));
+    setPaletteColor(palette, QPalette::Link, QColor("#75b6e7"));
+    setPaletteColor(palette, QPalette::LinkVisited, QColor("#c8a7e8"));
+    setPaletteColor(palette, QPalette::ToolTipBase, QColor("#333333"));
+    setPaletteColor(palette, QPalette::ToolTipText, QColor("#f2f2f2"));
+    setPaletteColor(palette, QPalette::PlaceholderText, QColor("#a0a0a0"));
+#if QT_VERSION >= QT_VERSION_CHECK(6, 6, 0)
+    setPaletteColor(palette, QPalette::Accent, QColor("#60cdff"));
+#endif
+
+    palette.setColor(QPalette::Disabled, QPalette::WindowText, QColor("#858585"));
+    palette.setColor(QPalette::Disabled, QPalette::Text, QColor("#858585"));
+    palette.setColor(QPalette::Disabled, QPalette::ButtonText, QColor("#858585"));
+    palette.setColor(QPalette::Disabled, QPalette::Base, QColor("#262626"));
+    palette.setColor(QPalette::Disabled, QPalette::Button, QColor("#292929"));
+    palette.setColor(QPalette::Disabled, QPalette::Highlight, QColor("#454545"));
+    palette.setColor(QPalette::Disabled, QPalette::HighlightedText, QColor("#858585"));
+    palette.setColor(QPalette::Disabled, QPalette::Link, QColor("#858585"));
+    palette.setColor(QPalette::Disabled, QPalette::LinkVisited, QColor("#858585"));
+    palette.setColor(QPalette::Disabled, QPalette::PlaceholderText, QColor("#707070"));
+    return palette;
+}
+
+
+} // Anonymous namespace
 
 
 //****************************************************************************************************************************************************
@@ -82,11 +194,14 @@ ETheme selectedThemeInCombo(QComboBox const &combo) {
 //****************************************************************************************************************************************************
 void applyThemePreferences(bool useCustomTheme, ETheme theme) {
     try {
+        applyApplicationColorScheme(useCustomTheme, theme);
         if (!useCustomTheme) {
+            qApp->setPalette(nativeApplicationPalette());
             qApp->setStyleSheet(loadStylesheetFile(":/MainWindow/Resources/StyleNoCustom.qss"));
             return;
         }
 
+        qApp->setPalette((ETheme::Dark == theme) ? darkPalette() : lightPalette());
         qApp->setStyleSheet(loadStylesheetFile(":/MainWindow/Resources/StyleCommon.qss") + "\n" +
                             loadStylesheetFile(QString(":/MainWindow/Resources/Style%1.qss").arg((ETheme::Dark == theme)
                                                                                                  ? "Dark" : "Light")));
@@ -95,6 +210,8 @@ void applyThemePreferences(bool useCustomTheme, ETheme theme) {
         QString const &msg = e.qwhat();
         if (!msg.isEmpty())
             globals::debugLog().addWarning(msg);
+        applyApplicationColorScheme(false, ETheme::Light);
+        qApp->setPalette(nativeApplicationPalette());
         qApp->setStyleSheet(QString());
     }
 

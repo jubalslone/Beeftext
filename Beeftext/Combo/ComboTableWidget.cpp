@@ -10,6 +10,8 @@
 #include "stdafx.h"
 #include "ComboTableWidget.h"
 #include "ComboImportDialog.h"
+#include "ComboExportDialog.h"
+#include "ComboPortability.h"
 #include "ComboManager.h"
 #include "ComboDialog.h"
 #include "Preferences/PreferencesManager.h"
@@ -70,9 +72,8 @@ void ComboTableWidget::setupActions() {
         { &actionEnableDisableCombo_, tr("&Enable"), tr("Enable Combo"), tr("Ctrl+E"), &ComboTableWidget::onActionEnableDisableCombo },
         { &actionNewCombo_, tr("&New"), tr("New Combo"), tr("Ctrl+N"), &ComboTableWidget::onActionNewCombo },
         { &actionSelectAll_, tr("Select &All"), tr("Select All"), tr("Ctrl+A"), &ComboTableWidget::onActionSelectAll },
-        { &actionExportAllCombos_, tr("Export A&ll"), tr("Export All Combos"), tr("Ctrl+Shift+O"), &ComboTableWidget::onActionExportAllCombos },
-        { &actionExportCombo_, tr("&Export"), tr("Export Selected Combo"), tr("Ctrl+O"), &ComboTableWidget::onActionExportCombo },
-        { &actionImportCombos_, tr("I&mport"), tr("Import Combos"), tr("Ctrl+I"), &ComboTableWidget::onActionImportCombos },
+		{ &actionExportCombos_, tr("&Export Combos…"), tr("Export Combos"), tr("Ctrl+O"), &ComboTableWidget::onActionExportCombos },
+		{ &actionImportCombos_, tr("&Import Combos…"), tr("Import Combos"), tr("Ctrl+I"), &ComboTableWidget::onActionImportCombos },
     };
 
     for (ActionMapping const& mapping: actionMappings) {
@@ -120,10 +121,6 @@ QMenu *ComboTableWidget::menu(QWidget *parent) const {
     menu->addSeparator();
     menu->addAction(actionSelectAll_);
     menu->addAction(actionDeselectAll_);
-    menu->addSeparator();
-    menu->addAction(actionImportCombos_);
-    menu->addAction(actionExportCombo_);
-    menu->addAction(actionExportAllCombos_);
     menu->setProperty(kPropMoveToMenu, QVariant::fromValue(moveToMenu));
     connect(menu, &QMenu::aboutToShow, this, &ComboTableWidget::onContextMenuAboutToShow);
     connect(moveToMenu, &QMenu::triggered, this, &ComboTableWidget::onMoveToGroupMenuTriggered);
@@ -361,8 +358,7 @@ void ComboTableWidget::updateGui() const {
     actionEditCombo_->setEnabled(hasOneSelected);
     actionCopySnippet_->setEnabled(hasOneSelected);
     actionEnableDisableCombo_->setEnabled(hasOneSelected);
-    actionExportCombo_->setEnabled(hasOneOrMoreSelected);
-    actionExportAllCombos_->setEnabled(!listIsEmpty);
+	actionExportCombos_->setEnabled(!listIsEmpty);
     QString enableDisableText = tr("Ena&ble");
     QString enableDisableToolTip = tr("Enable combo");
     QString enableDisableIconText = tr("Enable the combo");
@@ -524,7 +520,11 @@ void ComboTableWidget::onActionCopySnippet() {
     QString text = combo->evaluatedSnippet(cancelled);
     if (cancelled)
         return;
-    text.remove(constants::kVariableRegExp); ///< Remove all remaining variables (#{cursor},  #{delay:},... )
+    if constexpr (constants::kRestrictedBuild)
+        text = tlf::prepareSnippet(text,
+            PreferencesManager::instance().allowRealLineBreaksInSnippets()).text;
+    else
+        text.remove(constants::kVariableRegExp); ///< Remove all remaining variables (#{cursor},  #{delay:},... )
     QGuiApplication::clipboard()->setText(text);
 }
 
@@ -570,57 +570,68 @@ void ComboTableWidget::onActionEnableDisableCombo() {
 //****************************************************************************************************************************************************
 // 
 //****************************************************************************************************************************************************
-void ComboTableWidget::onActionExportCombo() {
-    QList<qint32> const indexes = this->getSelectedComboIndexes();
-    if (indexes.empty())
-        return;
+void ComboTableWidget::onActionExportCombos() {
+	ComboList const &comboList = ComboManager::instance().comboListRef();
+	if (comboList.isEmpty())
+		return;
 
-    PreferencesManager const &prefs = PreferencesManager::instance();
-    QString const path = QFileDialog::getSaveFileName(this, tr("Export Combos"), prefs.lastComboImportExportPath(), globals::jsonCsvFileDialogFilter());
-    if (path.isEmpty())
-        return;
-    prefs.setLastComboImportExportPath(path);
+	QList<qint32> const selectedIndexes = this->getSelectedComboIndexes();
+	ComboExportDialog scopeDialog(selectedIndexes.size(), this);
+	if (scopeDialog.exec() != QDialog::Accepted)
+		return;
 
-    ComboList const &comboList = ComboManager::instance().comboListRef();
-    ComboList exportList;
-    for (qint32 const index: indexes) {
-        Q_ASSERT((index >= 0) && (index < comboList.size()));
-        exportList.append(comboList[index]);
-    }
-    if (exportList.isEmpty()) {
-        globals::debugLog().addError("Export list is empty");
-        QMessageBox::critical(this, tr("Error"), tr("Nothing to export."));
-        return;
-    }
+	QJsonArray combos;
+	if (scopeDialog.scope() == ComboExportDialog::EScope::Selected) {
+		for (qint32 const index: selectedIndexes) {
+			Q_ASSERT(index >= 0 && index < comboList.size());
+			combos.append(comboList[index]->toJsonObject(true));
+		}
+	} else {
+		for (SpCombo const &combo: comboList)
+			combos.append(combo->toJsonObject(true));
+	}
 
-    // if file extension is .csv we save as CSV, otherwise we export in JSON format
-    QString errorMsg;
-    bool const result = (0 == QFileInfo(path).suffix().compare("csv", Qt::CaseInsensitive)) ?
-        exportList.exportToCsvFile(path, &errorMsg) : exportList.save(path, false, &errorMsg);
-    if (!result) {
-        globals::debugLog().addError(errorMsg);
-        QMessageBox::critical(this, tr("Error"), tr("Could not save the combo list file."));
-    }
+	QJsonArray const allGroups = ComboManager::instance().groupListRef().toJsonArray();
+	QJsonArray const groups = scopeDialog.scope() == ComboExportDialog::EScope::Selected
+		? combo_portability::referencedGroups(combos, allGroups) : allGroups;
+
+	PreferencesManager const &prefs = PreferencesManager::instance();
+	QString folder = prefs.lastComboImportExportPath();
+	if (!folder.isEmpty() && !QFileInfo(folder).isDir())
+		folder = QFileInfo(folder).absolutePath();
+	if (folder.isEmpty() || !QFileInfo(folder).isDir())
+		folder = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
+
+	QFileDialog fileDialog(this, tr("Export Combos"),
+		QDir(folder).absoluteFilePath(combo_portability::defaultExportFileName()),
+		combo_portability::exportFileDialogFilter());
+	fileDialog.setAcceptMode(QFileDialog::AcceptSave);
+	fileDialog.setFileMode(QFileDialog::AnyFile);
+	fileDialog.setDefaultSuffix("txt");
+	if (fileDialog.exec() != QDialog::Accepted || fileDialog.selectedFiles().isEmpty())
+		return;
+	QString path = fileDialog.selectedFiles().constFirst();
+	if (QFileInfo(path).suffix().compare("txt", Qt::CaseInsensitive) != 0)
+		path = QDir(QFileInfo(path).absolutePath()).absoluteFilePath(QFileInfo(path).completeBaseName() + ".txt");
+	prefs.setLastComboImportExportPath(path);
+
+	QString errorMessage;
+	if (!combo_portability::saveLeanBundle(path, combos, groups, &errorMessage)) {
+		globals::debugLog().addError(errorMessage);
+		QMessageBox::critical(this, tr("Error"), errorMessage);
+	}
 }
 
 
 //****************************************************************************************************************************************************
-// 
+/// \param[in] parent The parent widget of the menu.
+/// \return The top-level Combos menu containing the complete user-facing portability model.
 //****************************************************************************************************************************************************
-void ComboTableWidget::onActionExportAllCombos() {
-    PreferencesManager const &prefs = PreferencesManager::instance();
-    QString const path = QFileDialog::getSaveFileName(this, tr("Export All Combos"), prefs.lastComboImportExportPath(), globals::jsonCsvFileDialogFilter());
-    if (path.isEmpty())
-        return;
-    prefs.setLastComboImportExportPath(path);
-    QString errMsg;
-    ComboList const &comboList = ComboManager::instance().comboListRef();
-    bool const result = (0 == QFileInfo(path).suffix().compare("csv", Qt::CaseInsensitive)) ?
-        comboList.exportToCsvFile(path, &errMsg) : comboList.save(path, false, &errMsg);
-    if (!result) {
-        globals::debugLog().addError(errMsg);
-        QMessageBox::critical(this, tr("Error"), tr("Could not save the combo list file."));
-    }
+QMenu *ComboTableWidget::portabilityMenu(QWidget *parent) const {
+	QMenu *menu = new QMenu(menuTitle(), parent);
+	menu->addAction(actionImportCombos_);
+	menu->addAction(actionExportCombos_);
+	return menu;
 }
 
 

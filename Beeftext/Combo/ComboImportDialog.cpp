@@ -10,11 +10,9 @@
 #include "stdafx.h"
 #include "ComboImportDialog.h"
 #include "ComboManager.h"
+#include "ComboPortability.h"
 #include "Preferences/PreferencesManager.h"
 #include "BeeftextGlobals.h"
-#include "BeeftextConstants.h"
-#include "BeeftextUtils.h"
-#include <XMiLib/File/CsvIO.h>
 #include <XMiLib/Exception.h>
 #include <XMiLib/XMiLibConstants.h>
 
@@ -27,7 +25,7 @@
 bool loadCombosFromCsvFile(QString const &filePath, ComboList &outResult) {
     outResult.clear();
     QVector<QStringList> csvData;
-    if (!xmilib::loadCsvFile(filePath, csvData))
+	if (!combo_portability::loadLegacyCsvRows(filePath, csvData))
         return false;
     for (QStringList const &row: csvData) {
         if (row.size() != 3)
@@ -51,6 +49,7 @@ bool loadCombosFromCsvFile(QString const &filePath, ComboList &outResult) {
 ComboImportDialog::ComboImportDialog(QString const &filePath, SpGroup const &group, QWidget *parent)
     : QDialog(parent, xmilib::constants::kDefaultDialogFlags), ui_() {
     ui_.setupUi(this);
+	setWindowTitle(tr("Import Combos"));
 
     connect(ui_.buttonBrowse, &QPushButton::clicked, this, &ComboImportDialog::onBrowse);
     connect(ui_.buttonCancel, &QPushButton::clicked, this, &ComboImportDialog::onCancel);
@@ -60,8 +59,6 @@ ComboImportDialog::ComboImportDialog(QString const &filePath, SpGroup const &gro
     connect(ui_.radioOverwrite, &QRadioButton::toggled, this, &ComboImportDialog::onConflictRadioToggled);
     connect(ui_.radioSkipConflicts, &QRadioButton::toggled, this, &ComboImportDialog::onConflictRadioToggled);
 
-    ui_.labelSupportedFormats->setText(ui_.labelSupportedFormats->text()
-        .arg(colorToHex(constants::blueBeeftextColor, false)));
     GroupList &groupList = ComboManager::instance().groupListRef();
     groupList.ensureNotEmpty();
     ui_.comboGroup->setContent(groupList);
@@ -123,6 +120,9 @@ void ComboImportDialog::dropEvent(QDropEvent *event) {
 // 
 //****************************************************************************************************************************************************
 void ComboImportDialog::updateGui() const {
+	ui_.label->setText(preserveImportedGroups_
+		? tr("Groups from this Lean file will be preserved.") : tr("Import into group"));
+	ui_.comboGroup->setVisible(!preserveImportedGroups_);
     qint32 const conflictingNewerCount = conflictingNewerCombos_.size();
     qint32 const conflictingTotalCount = conflictingNewerCount + conflictingOlderCombos_.size();
 
@@ -178,11 +178,44 @@ void ComboImportDialog::performFinalImport(qint32 &outFailureCount) {
     outFailureCount = 0;
     ComboList &comboList = ComboManager::instance().comboListRef();
     qint32 failureCount = 0;
-    SpGroup const group = ui_.comboGroup->currentGroup();
-    if (!group)
-        throw xmilib::Exception(tr("Please select a valid group."));
+	SpGroup const destinationGroup = ui_.comboGroup->currentGroup();
+	QHash<QUuid, SpGroup> importedGroupMap;
+	if (preserveImportedGroups_) {
+		GroupList &existingGroups = ComboManager::instance().groupListRef();
+		for (SpGroup const &importedGroup: importedGroups_) {
+			SpGroup resolvedGroup;
+			GroupList::iterator const uuidMatch = existingGroups.findByUuid(importedGroup->uuid());
+			if (uuidMatch != existingGroups.end())
+				resolvedGroup = *uuidMatch;
+			if (!resolvedGroup) {
+				GroupList::iterator const nameMatch = std::find_if(existingGroups.begin(), existingGroups.end(),
+					[&](SpGroup const &group) { return group && group->name() == importedGroup->name(); });
+				if (nameMatch != existingGroups.end())
+					resolvedGroup = *nameMatch;
+			}
+			if (!resolvedGroup) {
+				if (!existingGroups.append(importedGroup))
+					throw xmilib::Exception(tr("A group from the Lean combo file could not be imported."));
+				resolvedGroup = importedGroup;
+			}
+			importedGroupMap.insert(importedGroup->uuid(), resolvedGroup);
+		}
+	} else if (!destinationGroup) {
+		throw xmilib::Exception(tr("Please select a valid group."));
+	}
+
+	auto assignGroup = [&](SpCombo const &combo) {
+		if (!preserveImportedGroups_) {
+			combo->setGroup(destinationGroup);
+			return;
+		}
+		SpGroup const importedGroup = combo->group();
+		if (!importedGroup || !importedGroupMap.contains(importedGroup->uuid()))
+			throw xmilib::Exception(tr("A combo's group could not be restored from the Lean combo file."));
+		combo->setGroup(importedGroupMap.value(importedGroup->uuid()));
+	};
     for (SpCombo const &combo: importableCombos_) {
-        combo->setGroup(group);
+		assignGroup(combo);
         if (!comboList.append(combo))
             ++failureCount;
     }
@@ -198,7 +231,7 @@ void ComboImportDialog::performFinalImport(qint32 &outFailureCount) {
             ++failureCount;
             continue;
         }
-        combo->setGroup(group);
+		assignGroup(combo);
         *it = combo;
     }
 }
@@ -246,7 +279,7 @@ void ComboImportDialog::onCancel() {
 //****************************************************************************************************************************************************
 void ComboImportDialog::onBrowse() {
     PreferencesManager const &prefs = PreferencesManager::instance();
-    QString const path = QFileDialog::getOpenFileName(this, tr("Select Combo File"), prefs.lastComboImportExportPath(), globals::jsonCsvFileDialogFilter());
+	QString const path = QFileDialog::getOpenFileName(this, tr("Import Combos"), prefs.lastComboImportExportPath(), combo_portability::importFileDialogFilter());
     if (path.isEmpty())
         return;
     prefs.setLastComboImportExportPath(path);
@@ -262,25 +295,44 @@ void ComboImportDialog::onEditPathTextChanged(QString const &text) {
     importableCombos_.clear();
     conflictingOlderCombos_.clear();
     conflictingNewerCombos_.clear();
+	importedGroups_.clear();
+	preserveImportedGroups_ = false;
 
     ComboList candidateList;
     ComboList &comboList = ComboManager::instance().comboListRef();
     QString const path = QDir::fromNativeSeparators(text);
-    QString const errorTitle = tr("Error");
-    if (!candidateList.load(path)) // not a JSON file, let's try CSV
-    {
-        if (!loadCombosFromCsvFile(path, candidateList))
-            currentError_ = tr("The file is invalid.");
-        else if (candidateList.isEmpty())
-            currentError_ = tr("The file does not contain importable data.");
-        if (!currentError_.isEmpty()) {
-            this->updateGui();
-            return;
-        }
+	combo_portability::EInputFormat const format = combo_portability::inputFormat(path);
+	if (format == combo_portability::EInputFormat::LeanTextJson
+		|| format == combo_portability::EInputFormat::LegacyJson) {
+		QJsonDocument document;
+		QString errorMessage;
+		if (!combo_portability::loadJsonForImport(path, ComboList::fileFormatVersionNumber, document,
+			preserveImportedGroups_, &errorMessage)
+			|| !candidateList.readFromJsonDocument(document, nullptr, &errorMessage)) {
+			currentError_ = errorMessage.isEmpty() ? tr("The file is invalid.") : errorMessage;
+		}
+		if (currentError_.isEmpty() && preserveImportedGroups_)
+			importedGroups_ = candidateList.groupListRef();
+	} else if (format == combo_portability::EInputFormat::LegacyCsv) {
+		if (!loadCombosFromCsvFile(path, candidateList))
+			currentError_ = tr("The legacy Beeftext CSV file is invalid.");
+	} else {
+		currentError_ = tr("The selected file type is not supported. Choose a Lean .txt, Beeftext .json, or Beeftext .csv file.");
+	}
+	if (currentError_.isEmpty() && candidateList.isEmpty())
+		currentError_ = tr("The file does not contain importable combo data.");
+	if (!currentError_.isEmpty()) {
+		this->updateGui();
+		return;
     }
 
     for (SpCombo const &combo: candidateList) {
-        combo->changeUuid(); // we get new a new UUID for imported combo. UUID are intended for synchronization purposes, not import/export
+		// Legacy imports keep the established behavior of receiving new UUIDs. Lean bundles
+		// retain UUIDs for a faithful transfer unless that UUID already identifies a
+		// different local combo, in which case a new UUID prevents a duplicate-ID failure.
+		ComboList::const_iterator const uuidMatch = comboList.findByUuid(combo->uuid());
+		if (!preserveImportedGroups_ || (uuidMatch != comboList.end() && (*uuidMatch)->keyword() != combo->keyword()))
+			combo->changeUuid();
         ComboList::const_iterator const it = comboList.findByKeyword(combo->keyword());
         if (comboList.end() == it) {
             importableCombos_.append(combo);
@@ -304,5 +356,3 @@ void ComboImportDialog::onConflictRadioToggled(bool state) const {
         return; // we are only interested in signals from the radio being checked
     this->updateGui();
 }
-
-

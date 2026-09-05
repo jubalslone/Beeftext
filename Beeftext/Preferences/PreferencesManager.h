@@ -36,10 +36,6 @@ public: // member functions
     QSettings &settings(); ///< Returns a reference the settings for the application.
     void init() const; ///< Initialize the preferences manager.
     void reset(); ///< Reset the preferences to their default values
-    bool save(QString const &path) const; ///< Save the preference to a JSON file.
-    bool load(QString const &path) const; ///< Load the preference from a JSON file.
-    void toJsonDocument(QJsonDocument &outDoc) const; ///< Copy the preferences to a JSON document.
-    void fromJsonDocument(QJsonDocument const &doc) const; ///< Load the preferences from a JSON document.
     void resetWarnings() const; ///< Reset the warnings
     void setAlreadyLaunched() const; ///< Set the value for the 'First Launch' preference to false
     bool alreadyLaunched() const; ///< Test whether this is the first time the application is launched
@@ -68,6 +64,8 @@ public: // member functions
     bool useCustomTheme() const; ///< Get the value for the 'Use custom theme' preference
     void setUseAutomaticSubstitution(bool value) const; ///< Set the value for the 'Use automatic substitution' preference
     bool useAutomaticSubstitution() const; ///< Get the value for the 'Use automatic substitution' preference
+    void setAllowRealLineBreaksInSnippets(bool value) const; ///< Set whether restricted snippets may insert real line breaks.
+    bool allowRealLineBreaksInSnippets() const; ///< Get whether restricted snippets may insert real line breaks.
     void setComboTriggersOnSpace(bool value) const; ///< Set the value for the 'Combo triggers on space' preference.
     bool comboTriggersOnSpace() const; ///< Set the value for the 'Combo triggers on space' preference.
     void setKeepFinalSpaceCharacter(bool value) const; ///< Set the value for the 'Keep final space character' preference.
@@ -164,6 +162,7 @@ private: // data members
 
     public: // data members
         bool useAutomaticSubstitution { true }; ///< Cached value for the 'use automatic substitution' preference value
+        bool allowRealLineBreaksInSnippets { false }; ///< Cached restricted multiline-snippet preference.
         bool comboTriggersOnSpace { false }; ///< Cached value for the 'combo trigger on space' preference.
         bool keepFinalSpaceCharacter { false }; ///< Cached value for the 'keep final space character' preference.
         SpShortcut comboTriggerShortcut; ///< Cached value for the 'combo trigger shortcut' preference

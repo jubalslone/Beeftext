@@ -269,8 +269,11 @@ QString logFilePath() {
 /// \return The path of the backup folder
 //****************************************************************************************************************************************************
 QString backupFolderPath() {
-    PreferencesManager const &prefs = PreferencesManager::instance();
     QString defaultPath = defaultBackupFolderPath();
+    if (isInPortableMode())
+        return defaultPath;
+
+    PreferencesManager const &prefs = PreferencesManager::instance();
     if (!prefs.useCustomBackupLocation())
         return defaultPath;
     QString const customPath = PreferencesManager::instance().customBackupLocation();
@@ -317,34 +320,7 @@ QString emojiExcludedAppsFilePath() {
 /// \return the color of disabled items in tables and list views.
 //****************************************************************************************************************************************************
 QColor disabledTextColorInTablesAndLists() {
-    PreferencesManager const &prefs = PreferencesManager::instance();
-    return (prefs.useCustomTheme() && (ETheme::Dark == prefs.theme())) ? QColor(0x55, 0x55, 0x55)
-                                                                       : QColor(0xa0, 0xa0, 0xa0);
-}
-
-
-//****************************************************************************************************************************************************
-/// \return The filter for the backup files dialog.
-//****************************************************************************************************************************************************
-QString backupFileDialogFilter() {
-    return QObject::tr("Beeftext backup files (*.%1);;All files (*.*)").arg(constants::backupFileExtension);
-}
-
-
-//****************************************************************************************************************************************************
-/// \return The filter for the JSON files dialog.
-//****************************************************************************************************************************************************
-QString jsonFileDialogFilter() {
-    return QObject::tr("JSON files (*.json);;All files (*.*)");
-}
-
-
-//****************************************************************************************************************************************************
-/// \return The filter for the JSON & CSV files dialog.
-//****************************************************************************************************************************************************
-QString jsonCsvFileDialogFilter() {
-    return QObject::tr("JSON & CSV files (*.json *.csv);;JSON files (*.json);;"
-                       "CSV files (*.csv);;All files (*.*)");
+    return qApp->palette().color(QPalette::Disabled, QPalette::Text);
 }
 
 

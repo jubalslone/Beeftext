@@ -19,7 +19,7 @@
 #include "BeeftextUtils.h"
 #include "BeeftextGlobals.h"
 #include "BeeftextConstants.h"
-#include <XMiLib/Exception.h>
+#include "TLFSafeBuild.h"
 
 
 using namespace xmilib;
@@ -196,6 +196,7 @@ SpShortcut readShortcutFromPreferences(QSettings const &settings, QString const 
 void PreferencesManager::Cache::init() {
     // Cache often accessed values
     useAutomaticSubstitution = ::readSettings<bool>(settings_, kKeyUseAutomaticSubstitution, kDefaultUseAutomaticSubstitution);
+    allowRealLineBreaksInSnippets = tlf::readAllowRealLineBreaksInSnippets(settings_);
     comboTriggersOnSpace = ::readSettings<bool>(settings_, kKeyComboTriggersOnSpace, kDefaultComboTriggersOnSpace);
     keepFinalSpaceCharacter = ::readSettings<bool>(settings_, kKeyKeepFinalSpaceCharacter, kDefaultKeepFinalSpaceCharacter);
     cacheComboTriggerShortcut();
@@ -382,6 +383,7 @@ void PreferencesManager::reset() {
     this->setLocale(I18nManager::instance().validateLocale(QLocale::system()));
     this->setPlaySoundOnCombo(kDefaultPlaySoundOnCombo);
     this->setUseAutomaticSubstitution(kDefaultUseAutomaticSubstitution);
+    this->setAllowRealLineBreaksInSnippets(tlf::kDefaultAllowRealLineBreaksInSnippets);
     this->setComboTriggersOnSpace(kDefaultComboTriggersOnSpace);
     this->setKeepFinalSpaceCharacter(kDefaultKeepFinalSpaceCharacter);
     this->setUseCustomBackupLocation(kDefaultUseCustomBackupLocation);
@@ -399,206 +401,6 @@ void PreferencesManager::reset() {
         this->setComboListFolderPath(globals::appDataDir());
     }
     applyComboPickerPreferences();
-}
-
-
-//****************************************************************************************************************************************************
-/// \param[in] path The path of the file to save to.
-/// \return true if and only if the operation was completed successfully.
-//****************************************************************************************************************************************************
-bool PreferencesManager::save(QString const &path) const {
-    try {
-        QJsonDocument doc;
-        this->toJsonDocument(doc);
-        QFile file(path);
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
-            throw Exception("The output file could not be opened.");
-        QByteArray const data = doc.toJson();
-        if (data.size() != file.write(data))
-            throw Exception("An error occurred while trying to write file.");
-        return true;
-    }
-    catch (Exception const &e) {
-        globals::debugLog().addError(e.qwhat());
-        return false;
-    }
-}
-
-
-//****************************************************************************************************************************************************
-/// \param[in] path The path of the file to load from.
-/// \return true if and only if the operation was completed successfully.
-//****************************************************************************************************************************************************
-bool PreferencesManager::load(QString const &path) const {
-    try {
-        QFile file(path);
-        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-            throw Exception("The output file could not be opened.");
-        QJsonDocument const doc = QJsonDocument::fromJson(file.readAll());
-        if (doc.isNull())
-            throw Exception("The input file is not a valid JSON file.");
-        this->fromJsonDocument(doc);
-        return true;
-    }
-    catch (Exception const &e) {
-        globals::debugLog().addError(e.qwhat());
-        return false;
-    }
-}
-
-
-//****************************************************************************************************************************************************
-/// \param[in] object The JSON object.
-/// \param[in] key The key.
-/// \return The value associated with the key
-//****************************************************************************************************************************************************
-template<typename T>
-T objectValue(QJsonObject const &object, QString const &key) {
-    if (!object.contains(key))
-        throw Exception(QString("Could not find entry %1 in imported preferences file.").arg(key));
-    QVariant const v = object[key].toVariant();
-    if (!v.canConvert<T>())
-        throw Exception(QString("The value for entry %1 in imported preferences file is invalid.").arg(key));
-    return v.value<T>();
-}
-
-
-//****************************************************************************************************************************************************
-/// \param[in] v The QVariant.
-/// \return A serializable array containing a QVariant.
-//****************************************************************************************************************************************************
-QByteArray variantToByteArray(QVariant const &v) {
-    QByteArray data;
-    QDataStream stream(&data, QIODevice::WriteOnly);
-    stream << v;
-    return data;
-}
-
-
-//****************************************************************************************************************************************************
-/// \brief Deserialize a QVariant from a byte array
-///
-/// \param[in] data The byte array.
-/// \return The deserialized QVariant
-//****************************************************************************************************************************************************
-template<typename T>
-T byteArrayToVariant(QByteArray const &data) {
-    QByteArray array(data);
-    QDataStream stream(&array, QIODevice::ReadOnly);
-    QVariant v;
-    stream >> v;
-    if (!v.canConvert<T>())
-        throw Exception("The imported file is invalid.");
-    return v.value<T>();
-}
-
-
-//****************************************************************************************************************************************************
-/// \param[out] outDoc The JSON document.
-//****************************************************************************************************************************************************
-void PreferencesManager::toJsonDocument(QJsonDocument &outDoc) const {
-    QJsonObject object;
-    object[kKeyAppEnableShortcutKeyCodeDeprecated] = qint32(this->readSettings<quint32>(kKeyAppEnableShortcutKeyCodeDeprecated, 0));
-    object[kKeyAppEnableShortcutModifiersDeprecated] = qint32(this->readSettings<quint32>(kKeyAppEnableShortcutModifiersDeprecated, 0));
-    object[kKeyAppEnableShortcutScanCodeDeprecated] = qint32(this->readSettings<quint32>(kKeyAppEnableShortcutScanCodeDeprecated, 0));
-    object[kKeyAutoBackup] = this->readSettings<bool>(kKeyAutoBackup, kDefaultAutoBackup);
-    object[kKeyAutoCheckForUpdates] = this->readSettings<bool>(kKeyAutoCheckForUpdates, kDefaultAutoCheckForUpdates);
-    object[kKeyAutoStartAtLogin] = this->readSettings<bool>(kKeyAutoStartAtLogin, kDefaultAutoStartAtLogin);
-    object[kKeyBeeftextEnabled] = this->readSettings<bool>(kKeyBeeftextEnabled, kDefaultBeeftextEnabled);
-    object[kKeyComboListFolderPath] = this->readSettings<QString>(kKeyComboListFolderPath, defaultComboListFolderPath());
-    object[kKeyComboPickerEnabled] = this->readSettings<bool>(kKeyComboPickerEnabled, kDefaultComboPickerEnabled);
-    object[kKeyComboPickerShortcutKeyCodeDeprecated] = qint32(this->readSettings<quint32>(kKeyComboPickerShortcutKeyCodeDeprecated, 0));
-    object[kKeyComboPickerShortcutModifiersDeprecated] = qint32(this->readSettings<quint32>(kKeyComboPickerShortcutModifiersDeprecated, 0));
-    object[kKeyComboPickerShortcutScanCodeDeprecated] = qint32(this->readSettings<quint32>(kKeyComboPickerShortcutScanCodeDeprecated, 0));
-    object[kKeyComboTriggerShortcutKeyCodeDeprecated] = qint32(this->readSettings<quint32>(kKeyComboTriggerShortcutKeyCodeDeprecated, 0));
-    object[kKeyComboTriggerShortcutModifiersDeprecated] =
-        qint32(this->readSettings<quint32>(kKeyComboTriggerShortcutModifiersDeprecated, 0));
-    object[kKeyComboTriggerShortcutScanCodeDeprecated] =
-        qint32(this->readSettings<quint32>(kKeyComboTriggerShortcutScanCodeDeprecated, 0));
-    object[kKeyDefaultMatchingMode] = qint32(this->readSettings<qint32>(kKeyDefaultMatchingMode, static_cast<qint32>(kDefaultDefaultMatchingMode)));
-    object[kKeyDefaultCaseSensitivity] = this->readSettings<qint32>(kKeyDefaultCaseSensitivity, qint32(kDefaultDefaultCaseSensitivity));
-    object[kKeyCustomBackupLocation] = this->readSettings<QString>(kKeyCustomBackupLocation, globals::defaultBackupFolderPath());
-    object[kKeyCustomSoundPath] = this->readSettings<QString>(kKeyCustomSoundPath, QString());
-    object[kKeyDelayBetweenKeystrokes] = this->readSettings<qint32>(kKeyDelayBetweenKeystrokes, kDefaultDelayBetweenKeystrokesMs);
-    object[kKeyEmojiLeftDelimiter] = this->readSettings<QString>(kKeyEmojiLeftDelimiter, kDefaultEmojiLeftDelimiter);
-    object[kKeyEmojiRightDelimiter] = this->readSettings<QString>(kKeyEmojiRightDelimiter, kDefaultEmojiRightDelimiter);
-    object[kKeyEmojiShortcodesEnabled] = this->readSettings<bool>(kKeyEmojiShortcodesEnabled, kDefaultEmojiShortcodesEnabled);
-    object[kKeyShowEmojisInPickerWindow] = this->readSettings<bool>(kKeyShowEmojisInPickerWindow, kDefaultShowEmojisInPickerWindow);
-    object[kKeyEnableAppEnableDisableShortcut] = this->readSettings<bool>(kKeyEnableAppEnableDisableShortcut, kDefaultEnableAppEnableDisableShortcut);
-    object[kKeyGeometry] = QString::fromLocal8Bit(this->readSettings<QByteArray>(kKeyGeometry, QByteArray()).toHex());
-    object[kKeyLastComboImportExportPath] = this->readSettings<QString>(kKeyLastComboImportExportPath, QString());
-    object[kKeyLastUpdateCheckDateTime] = QString::fromLocal8Bit(variantToByteArray(
-        this->lastUpdateCheckDateTime()).toHex());
-    object[kKeyLocale] = QString::fromLocal8Bit(variantToByteArray(this->locale()).toHex());
-    object[kKeySplitterState] = QString::fromLocal8Bit(this->readSettings<QByteArray>(kKeySplitterState, QByteArray()).toHex());
-    object[kKeyPlaySoundOnCombo] = this->readSettings<bool>(kKeyPlaySoundOnCombo, kDefaultPlaySoundOnCombo);
-    object[kKeyUseAutomaticSubstitution] = this->readSettings<bool>(kKeyUseAutomaticSubstitution, kDefaultUseAutomaticSubstitution);
-    object[kKeyComboTriggersOnSpace] = this->readSettings<bool>(kKeyComboTriggersOnSpace, kDefaultComboTriggersOnSpace);
-    object[kKeyUseCustomBackupLocation] = this->readSettings<bool>(kKeyUseCustomSound, kDefaultUseCustomBackupLocation);
-    object[kKeyUseCustomSound] = this->readSettings<bool>(kKeyUseCustomSound, kDefaultUseCustomSound);
-    object[kKeyUseCustomTheme] = this->readSettings<bool>(kKeyUseCustomTheme, kDefaultUseCustomTheme);
-    object[kKeyTheme] = this->readSettings<qint32>(kKeyTheme, static_cast<qint32>(kDefaultTheme));
-    object[kKeyWarnAboutShortComboKeyword] = this->readSettings<bool>(kKeyWarnAboutShortComboKeyword, kDefaultWarnAboutShortComboKeyword);
-    object[kKeyWriteDebugLogFile] = this->readSettings<bool>(kKeyWriteDebugLogFile, kDefaultWriteDebugLogFile);
-    object[kKeyRichTextDeprecationWarningHasAlreadyBeenDisplayed] = this->readSettings<bool>(
-        kKeyRichTextDeprecationWarningHasAlreadyBeenDisplayed, kDefaultKeyRichTextDeprecationWarningHasAlreadyBeenDisplayed);
-    object[kKeyUseLegacyCopyPaste] = this->readSettings<bool>(kKeyUseLegacyCopyPaste, kDefaultUseLegacyCopyPaste);
-    object[kKeyRestoreClipboardAfterSubstitution] = this->readSettings(kKeyRestoreClipboardAfterSubstitution, kDefaultRestoreClipboardAfterSubstitution);
-    object[kKeyUseShiftInsertForPasting] = this->readSettings<bool>(kKeyUseShiftInsertForPasting, kDefaultUseShiftInsertForPasting);
-    outDoc = QJsonDocument(object);
-}
-
-
-//****************************************************************************************************************************************************
-/// \param[in] doc The JSON document.
-//****************************************************************************************************************************************************
-void PreferencesManager::fromJsonDocument(QJsonDocument const &doc) const {
-    QJsonObject const object = doc.object();
-    settings_->setValue(kKeyAppEnableShortcutKeyCodeDeprecated, objectValue<quint32>(object, kKeyAppEnableShortcutKeyCodeDeprecated));
-    settings_->setValue(kKeyAppEnableShortcutModifiersDeprecated, objectValue<quint32>(object, kKeyAppEnableShortcutModifiersDeprecated));
-    settings_->setValue(kKeyAppEnableShortcutScanCodeDeprecated, objectValue<quint32>(object, kKeyAppEnableShortcutScanCodeDeprecated));
-    settings_->setValue(kKeyAutoBackup, objectValue<bool>(object, kKeyAutoBackup));
-    settings_->setValue(kKeyAutoCheckForUpdates, objectValue<bool>(object, kKeyAutoCheckForUpdates));
-    settings_->setValue(kKeyAutoStartAtLogin, objectValue<bool>(object, kKeyAutoStartAtLogin));
-    settings_->setValue(kKeyBeeftextEnabled, objectValue<bool>(object, kKeyBeeftextEnabled));
-    this->setComboListFolderPath(objectValue<QString>(object, kKeyComboListFolderPath));
-    settings_->setValue(kKeyComboPickerEnabled, objectValue<bool>(object, kKeyComboPickerEnabled));
-    settings_->setValue(kKeyComboPickerShortcutKeyCodeDeprecated, objectValue<quint32>(object, kKeyComboPickerShortcutKeyCodeDeprecated));
-    settings_->setValue(kKeyComboPickerShortcutModifiersDeprecated, objectValue<quint32>(object, kKeyComboPickerShortcutModifiersDeprecated));
-    settings_->setValue(kKeyComboPickerShortcutScanCodeDeprecated, objectValue<quint32>(object, kKeyComboPickerShortcutScanCodeDeprecated));
-    settings_->setValue(kKeyComboTriggerShortcutKeyCodeDeprecated, objectValue<quint32>(object, kKeyComboTriggerShortcutKeyCodeDeprecated));
-    settings_->setValue(kKeyComboTriggerShortcutModifiersDeprecated, objectValue<quint32>(object, kKeyComboTriggerShortcutModifiersDeprecated));
-    settings_->setValue(kKeyComboTriggerShortcutScanCodeDeprecated, objectValue<quint32>(object, kKeyComboTriggerShortcutScanCodeDeprecated));
-    settings_->setValue(kKeyDefaultMatchingMode, objectValue<qint32>(object, kKeyDefaultMatchingMode));
-    settings_->setValue(kKeyDefaultCaseSensitivity, objectValue<qint32>(object, kKeyDefaultCaseSensitivity));
-    settings_->setValue(kKeyCustomSoundPath, objectValue<QString>(object, kKeyCustomSoundPath));
-    this->setCustomBackupLocation(objectValue<QString>(object, kKeyCustomBackupLocation)); // we call the function because it has side effects
-    settings_->setValue(kKeyDelayBetweenKeystrokes, objectValue<qint32>(object, kKeyDelayBetweenKeystrokes));
-    settings_->setValue(kKeyEmojiLeftDelimiter, objectValue<QString>(object, kKeyEmojiLeftDelimiter));
-    settings_->setValue(kKeyEmojiRightDelimiter, objectValue<QString>(object, kKeyEmojiRightDelimiter));
-    settings_->setValue(kKeyEmojiShortcodesEnabled, objectValue<bool>(object, kKeyEmojiShortcodesEnabled));
-    settings_->setValue(kKeyShowEmojisInPickerWindow, objectValue<bool>(object, kKeyShowEmojisInPickerWindow));
-    settings_->setValue(kKeyEnableAppEnableDisableShortcut, objectValue<bool>(object, kKeyEnableAppEnableDisableShortcut));
-    settings_->setValue(kKeyGeometry, QByteArray::fromHex(objectValue<QString>(object, kKeyGeometry).toLocal8Bit()));
-    settings_->setValue(kKeyLastComboImportExportPath, objectValue<QString>(object, kKeyLastComboImportExportPath));
-    settings_->setValue(kKeyLastUpdateCheckDateTime, byteArrayToVariant<QDateTime>(QByteArray::fromHex(
-        objectValue<QString>(object, kKeyLastUpdateCheckDateTime).toLocal8Bit())));
-    settings_->setValue(kKeyLocale, byteArrayToVariant<QLocale>(QByteArray::fromHex(objectValue<QString>(object, kKeyLocale).toLocal8Bit())));
-    settings_->setValue(kKeyGeometry, QByteArray::fromHex(objectValue<QString>(object, kKeySplitterState).toLocal8Bit()));
-    settings_->setValue(kKeyPlaySoundOnCombo, objectValue<bool>(object, kKeyPlaySoundOnCombo));
-    settings_->setValue(kKeyUseAutomaticSubstitution, objectValue<bool>(object, kKeyUseAutomaticSubstitution));
-    settings_->setValue(kKeyComboTriggersOnSpace, objectValue<bool>(object, kKeyComboTriggersOnSpace));
-    this->setUseCustomBackupLocation(objectValue<bool>(object, kKeyUseCustomBackupLocation)); // we call the function because it has side effects
-    settings_->setValue(kKeyUseCustomSound, objectValue<bool>(object, kKeyUseCustomSound));
-    settings_->setValue(kKeyUseCustomTheme, objectValue<bool>(object, kKeyUseCustomTheme));
-    settings_->setValue(kKeyTheme, objectValue<qint32>(object, kKeyTheme));
-    settings_->setValue(kKeyWarnAboutShortComboKeyword, objectValue<bool>(object, kKeyWarnAboutShortComboKeyword));
-    settings_->setValue(kKeyWriteDebugLogFile, objectValue<bool>(object, kKeyWriteDebugLogFile));
-    settings_->setValue(kKeyRichTextDeprecationWarningHasAlreadyBeenDisplayed, objectValue<bool>(object, kKeyRichTextDeprecationWarningHasAlreadyBeenDisplayed));
-    this->setUseLegacyCopyPaste(objectValue<bool>(object, kKeyUseLegacyCopyPaste));
-    settings_->setValue(kKeyRestoreClipboardAfterSubstitution, objectValue<bool>(object, kKeyRestoreClipboardAfterSubstitution));
-    this->setUseShiftInsertForPasting(objectValue<bool>(object, kKeyUseShiftInsertForPasting));
-    this->init();
 }
 
 
@@ -849,6 +651,23 @@ bool PreferencesManager::useAutomaticSubstitution() const {
 
 
 //****************************************************************************************************************************************************
+/// \param[in] value Whether text line breaks should be inserted as real line breaks.
+//****************************************************************************************************************************************************
+void PreferencesManager::setAllowRealLineBreaksInSnippets(bool value) const {
+    cache_->allowRealLineBreaksInSnippets = value;
+    tlf::writeAllowRealLineBreaksInSnippets(*settings_, value);
+}
+
+
+//****************************************************************************************************************************************************
+/// \return true when restricted snippets may insert real line breaks.
+//****************************************************************************************************************************************************
+bool PreferencesManager::allowRealLineBreaksInSnippets() const {
+    return cache_->allowRealLineBreaksInSnippets;
+}
+
+
+//****************************************************************************************************************************************************
 /// \param[in] value The value for the preference.
 //****************************************************************************************************************************************************
 void PreferencesManager::setComboTriggersOnSpace(bool value) const {
@@ -1004,6 +823,13 @@ bool PreferencesManager::autoBackup() const {
 /// \param[in] value The value for the preference.
 //****************************************************************************************************************************************************
 void PreferencesManager::setUseCustomBackupLocation(bool value) const {
+    if (isInPortableMode()) {
+        settings_->setValue(kKeyUseCustomBackupLocation, false);
+        if (value)
+            globals::debugLog().addWarning("Ignoring a custom backup location while running in portable mode.");
+        return;
+    }
+
     QString const oldPath = globals::backupFolderPath();
     settings_->setValue(kKeyUseCustomBackupLocation, value);
     QString const newPath = globals::backupFolderPath();
@@ -1016,6 +842,8 @@ void PreferencesManager::setUseCustomBackupLocation(bool value) const {
 /// \return The value for the preference
 //****************************************************************************************************************************************************
 bool PreferencesManager::useCustomBackupLocation() const {
+    if (isInPortableMode())
+        return false;
     return this->readSettings<bool>(kKeyUseCustomBackupLocation, kDefaultUseCustomBackupLocation);
 }
 
@@ -1024,6 +852,12 @@ bool PreferencesManager::useCustomBackupLocation() const {
 /// \param[in] path The path of the custom backup location.
 //****************************************************************************************************************************************************
 void PreferencesManager::setCustomBackupLocation(QString const &path) const {
+    if (isInPortableMode()) {
+        if (QDir::cleanPath(path) != QDir::cleanPath(globals::defaultBackupFolderPath()))
+            globals::debugLog().addWarning("Ignoring a custom backup path while running in portable mode.");
+        return;
+    }
+
     QString const oldPath = globals::backupFolderPath();
     settings_->setValue(kKeyCustomBackupLocation, path);
     QString const newPath = globals::backupFolderPath();
@@ -1036,6 +870,8 @@ void PreferencesManager::setCustomBackupLocation(QString const &path) const {
 /// \return The custom backup location.
 //****************************************************************************************************************************************************
 QString PreferencesManager::customBackupLocation() const {
+    if (isInPortableMode())
+        return globals::defaultBackupFolderPath();
     return this->readSettings<QString>(kKeyCustomBackupLocation, globals::defaultBackupFolderPath());
 }
 
@@ -1389,7 +1225,7 @@ bool PreferencesManager::alreadyConvertedRichTextCombos() const {
 /// \param[in] value The value for the preference
 //****************************************************************************************************************************************************
 void PreferencesManager::setUseCustomPowershellVersion(bool value) const {
-    settings_->setValue(kKeyUseCustomPowershellVersion, value);
+    settings_->setValue(kKeyUseCustomPowershellVersion, constants::kRestrictedBuild ? false : value);
 }
 
 
@@ -1397,6 +1233,8 @@ void PreferencesManager::setUseCustomPowershellVersion(bool value) const {
 /// \return The value for the preference.
 //****************************************************************************************************************************************************
 bool PreferencesManager::useCustomPowershellVersion() const {
+    if constexpr (constants::kRestrictedBuild)
+        return false;
     return readSettings<bool>(kKeyUseCustomPowershellVersion, kDefaultUseCustomPowershellVersion);
 }
 
@@ -1405,6 +1243,10 @@ bool PreferencesManager::useCustomPowershellVersion() const {
 /// \param[in] path The path of the PowerShell executable.
 //****************************************************************************************************************************************************
 void PreferencesManager::setCustomPowershellPath(QString const &path) const {
+    if constexpr (constants::kRestrictedBuild) {
+        settings_->remove(kKeyCustomPowershellPath);
+        return;
+    }
     settings_->setValue(kKeyCustomPowershellPath, path);
 }
 
@@ -1413,6 +1255,8 @@ void PreferencesManager::setCustomPowershellPath(QString const &path) const {
 /// \return The path of the custom PowerShell executable.
 //****************************************************************************************************************************************************
 QString PreferencesManager::customPowershellPath() const {
+    if constexpr (constants::kRestrictedBuild)
+        return QString();
     return readSettings<QString>(kKeyCustomPowershellPath, QString());
 }
 
@@ -1490,5 +1334,3 @@ VersionNumber PreferencesManager::getSkipVersionNumber() const {
 void PreferencesManager::removeSkipVersionNumber() const {
     settings_->remove(kKeySkipVersionNumber);
 }
-
-

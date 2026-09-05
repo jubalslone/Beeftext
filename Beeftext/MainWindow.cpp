@@ -28,7 +28,7 @@
 MainWindow::MainWindow() {
     ui_.setupUi(this);
     groupsMenu_ = ui_.frameCombos->groupListWidget()->menu(this);
-    combosMenu_ = ui_.frameCombos->comboTableWidget()->menu(this);
+	combosMenu_ = ui_.frameCombos->comboTableWidget()->portabilityMenu(this);
     this->setupSystemTrayIcon();
     this->menuBar()->insertMenu(ui_.menu_Advanced->menuAction(), groupsMenu_);
     this->menuBar()->insertMenu(ui_.menu_Advanced->menuAction(), combosMenu_);
@@ -37,7 +37,6 @@ MainWindow::MainWindow() {
     ui_.actionOpenLogFile->setEnabled(prefs.writeDebugLogFile());
     connect(&InputManager::instance(), &InputManager::appEnableDisableShortcutTriggered, this, &MainWindow::onActionEnableDisableBeeftext);
     connect(ui_.actionVisitBeeftextWiki, &QAction::triggered, []() { QDesktopServices::openUrl(QUrl(constants::kBeeftextWikiHomeUrl)); });
-    connect(ui_.actionGettingStarted, &QAction::triggered, []() { QDesktopServices::openUrl(QUrl(constants::kGettingStartedUrl)); });
     connect(ui_.actionShowReleaseNotes, &QAction::triggered, []() { QDesktopServices::openUrl(QUrl(constants::kBeeftextReleasesPagesUrl)); });
     connect(ui_.actionReportBug, &QAction::triggered, []() { QDesktopServices::openUrl(QUrl(constants::kBeeftextIssueTrackerUrl)); });
     connect(&InputManager::instance(), &InputManager::comboMenuShortcutTriggered, this, &MainWindow::onShowComboMenu);
@@ -89,10 +88,7 @@ void MainWindow::dropEvent(QDropEvent *event) {
         QString const path = urls[0].toLocalFile();
         // note we need to postpone the launch of the dialogs to end the event handler ASAP, otherwise the application
         // that the file was dropped from will like be frozen until we complete the import dialog
-        if (QFileInfo(path).suffix() == constants::backupFileExtension)
-            QTimer::singleShot(0, [path, this]() { this->restoreBackup(path); });
-        else
-            QTimer::singleShot(0, [path, this]() { ui_.frameCombos->comboTableWidget()->runComboImportDialog(path); });
+		QTimer::singleShot(0, [path, this]() { ui_.frameCombos->comboTableWidget()->runComboImportDialog(path); });
     }
 }
 
@@ -219,24 +215,6 @@ void MainWindow::restoreWindowGeometry() {
 
 
 //****************************************************************************************************************************************************
-/// \param[in] path The path of the file to backup
-//****************************************************************************************************************************************************
-void MainWindow::restoreBackup(QString const &path) {
-    try {
-        if ((ComboManager::instance().comboListRef().rowCount(QModelIndex()) > 0)
-            && (!questionDialog(this, tr("Restore"), tr("If you restore a backup, all your current combos will "
-                                                        "be deleted and replaced by the content of the backup file."), tr("Restore"), tr("Cancel"))))
-            return;
-        if (!ComboManager::instance().restoreBackup(path))
-            throw xmilib::Exception("Could not restore backup file.");
-    }
-    catch (xmilib::Exception const &e) {
-        QMessageBox::critical(this, tr("Error"), e.qwhat());
-    }
-}
-
-
-//****************************************************************************************************************************************************
 /// An 'activation' in an action performed on the system tray icon.
 /// \param[in] reason The reason for the activation
 //****************************************************************************************************************************************************
@@ -313,36 +291,6 @@ void MainWindow::onActionShowLogWindow() {
     xmilib::DebugLogWindow &logWindow = globals::debugLogWindow();
     logWindow.setStyleSheet(QString());
     logWindow.show();
-}
-
-
-//****************************************************************************************************************************************************
-//
-//****************************************************************************************************************************************************
-void MainWindow::onActionBackup() {
-    QString folder = PreferencesManager::instance().lastComboImportExportPath();
-    if (!QFileInfo(folder).isDir())
-        folder = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-    QString const path = QFileDialog::getSaveFileName(this, tr("Backup"), QDir(folder).absoluteFilePath(QString("Beeftext.%1").arg(constants::backupFileExtension)), globals::backupFileDialogFilter());
-    if (path.isEmpty())
-        return;
-    QString errMsg;
-    if (!ComboManager::instance().comboListRef().save(path, true, &errMsg))
-        QMessageBox::critical(this, tr("Error"), errMsg);
-}
-
-
-//****************************************************************************************************************************************************
-//
-//****************************************************************************************************************************************************
-void MainWindow::onActionRestore() {
-    QString folder = PreferencesManager::instance().lastComboImportExportPath();
-    if (!QFileInfo(folder).isDir())
-        folder = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-    QString const path = QFileDialog::getOpenFileName(this, tr("Restore"), QDir(folder).absolutePath(), globals::backupFileDialogFilter());
-    if (path.isEmpty())
-        return;
-    this->restoreBackup(path);
 }
 
 
