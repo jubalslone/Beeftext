@@ -576,7 +576,7 @@ void ComboTableWidget::onActionExportCombos() {
 		return;
 
 	QList<qint32> const selectedIndexes = this->getSelectedComboIndexes();
-	ComboExportDialog scopeDialog(selectedIndexes.size(), comboList.size(), this);
+	ComboExportDialog scopeDialog(selectedIndexes.size(), this);
 	if (scopeDialog.exec() != QDialog::Accepted)
 		return;
 

@@ -9,7 +9,7 @@
 #include <XMiLib/XMiLibConstants.h>
 
 
-ComboExportDialog::ComboExportDialog(qint32 selectedCount, qint32 totalCount, QWidget *parent)
+ComboExportDialog::ComboExportDialog(qint32 selectedCount, QWidget *parent)
 	: QDialog(parent, xmilib::constants::kDefaultDialogFlags) {
 	setWindowTitle(tr("Export Combos"));
 	QVBoxLayout *layout = new QVBoxLayout(this);
@@ -17,7 +17,7 @@ ComboExportDialog::ComboExportDialog(qint32 selectedCount, qint32 totalCount, QW
 	QVBoxLayout *scopeLayout = new QVBoxLayout(scopeGroup);
 	selectedRadio_ = new QRadioButton(tr("Selected combos (%1)").arg(selectedCount), scopeGroup);
 	selectedRadio_->setEnabled(selectedCount > 0);
-	QRadioButton *allRadio = new QRadioButton(tr("All combos (%1)").arg(totalCount), scopeGroup);
+	QRadioButton *allRadio = new QRadioButton(tr("All combos"), scopeGroup);
 	scopeLayout->addWidget(selectedRadio_);
 	scopeLayout->addWidget(allRadio);
 	layout->addWidget(scopeGroup);

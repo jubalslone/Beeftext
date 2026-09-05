@@ -21,7 +21,7 @@ public:
 		All,
 	};
 
-	explicit ComboExportDialog(qint32 selectedCount, qint32 totalCount, QWidget *parent = nullptr);
+	explicit ComboExportDialog(qint32 selectedCount, QWidget *parent = nullptr);
 	EScope scope() const;
 
 private:
