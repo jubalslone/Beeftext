@@ -21,6 +21,8 @@ HEADERS += ./BeeftextConstants.h \
     ./Combo/ComboDialog.h \
     ./Combo/ComboSortFilterProxyModel.h \
     ./Combo/ComboImportDialog.h \
+    ./Combo/ComboExportDialog.h \
+    ./Combo/ComboPortability.h \
     ./Combo/ComboFrame.h \
     ./Combo/ComboTableWidget.h \
     ./Update/UpdateCheckWorker.h \
@@ -31,8 +33,7 @@ HEADERS += ./BeeftextConstants.h \
     ./Group/GroupDialog.h \
     ./Group/GroupComboBox.h \
     ./Group/GroupListWidget.h \
-    ./Backup/BackupManager.h \
-    ./Backup/BackupRestoreDialog.h
+    ./Backup/BackupManager.h
 SOURCES += ./AboutDialog.cpp \
     ./BeeftextConstants.cpp \
     ./BeeftextGlobals.cpp \
@@ -53,6 +54,8 @@ SOURCES += ./AboutDialog.cpp \
     ./Combo/ComboDialog.cpp \
     ./Combo/ComboFrame.cpp \
     ./Combo/ComboImportDialog.cpp \
+    ./Combo/ComboExportDialog.cpp \
+    ./Combo/ComboPortability.cpp \
     ./Combo/ComboList.cpp \
     ./Combo/ComboManager.cpp \
     ./Combo/ComboSortFilterProxyModel.cpp \
@@ -67,8 +70,7 @@ SOURCES += ./AboutDialog.cpp \
     ./Group/GroupDialog.cpp \
     ./Group/GroupList.cpp \
     ./Group/GroupListWidget.cpp \
-    ./Backup/BackupManager.cpp \
-    ./Backup/BackupRestoreDialog.cpp
+    ./Backup/BackupManager.cpp
 FORMS += ./MainWindow.ui \
     ./ShortcutDialog.ui \
     ./AboutDialog.ui \
@@ -79,7 +81,6 @@ FORMS += ./MainWindow.ui \
     ./Combo/ComboTableWidget.ui \
     ./Update/UpdateDialog.ui \
     ./Group/GroupDialog.ui \
-    ./Group/GroupListWidget.ui \
-    ./Backup/BackupRestoreDialog.ui
+    ./Group/GroupListWidget.ui
 TRANSLATIONS += ./Translations/beeftext_fr.ts
 RESOURCES += Beeftext.qrc

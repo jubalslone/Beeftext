@@ -57,7 +57,24 @@ The light and dark themes use Qt palettes for their surface, text, selection, li
 
 The selected application theme also sets Qt's application color-scheme hint. This keeps main-window, group, combo, dynamically created, and tray popup menus aligned with Beeftext's explicit Light or Dark choice even when it differs from the Windows theme, without replacing native menu metrics or interaction behavior.
 
-Backup and restore commands protect combo data only. **File > Back Up Combos…** and **File > Restore Combos…** retain the existing `.btbackup` format and behavior; **Preferences > Advanced > Automatic combo backup** controls the existing scheduled combo backups. Preferences continue to persist automatically through the normal settings store. Lean Beeftext contains no Preferences export/import UI or JSON settings-backup code path.
+Combo portability has one user-facing home: **Combos > Import Combos…** and **Combos > Export Combos…**. Export opens one choice dialog: **Selected combos (N)** is available when the table has a selection, and **All combos (N)** is available whenever combos exist. The menu command itself is disabled when there are no combos.
+
+Lean exports UTF-8, human-readable JSON with a `.txt` extension and the default filename `Lean-Beeftext-Combos.txt`. Schema version 1 is:
+
+```json
+{
+  "format": "lean-beeftext-combos",
+  "version": 1,
+  "groups": [],
+  "combos": []
+}
+```
+
+The `groups` and `combos` records contain the same complete group and combo fields used by the current Beeftext data model. An all-combos export includes every group, including empty groups; a selected-combos export includes each selected combo and every group it references. Lean `.txt` imports preserve those relationships. An imported group is matched to an existing group by UUID, then by exact name; otherwise the group is created from the bundle. The destination-group chooser is used only for legacy imports or a Lean bundle without group metadata.
+
+Legacy upstream Beeftext `.json` and `.csv` combo exports remain accepted through the same Import command and keep their existing destination-group behavior. The `.txt` format is the primary file-picker choice. Malformed or unsupported files are rejected before the live combo/group data is changed.
+
+Lean exposes no `.btbackup` backup/restore commands, automatic-backup controls, Preferences export/import UI, or JSON settings-backup path. Internal backup code and old settings may remain for storage compatibility, but they are not a parallel user portability workflow. Preferences continue to persist automatically through the normal settings store and are never included in Lean combo exports.
 
 Help, documentation, variables, import-format, translation-help, issue, release, and project-source links for this restricted build point to `https://github.com/jubalslone/Beeftext`. Until Lean-specific documentation pages are published there, general documentation links intentionally open the repository root rather than upstream instructions that describe unavailable features. Links to upstream Beeftext remain only when explicitly labeled as attribution or legacy compatibility information.
 
@@ -76,9 +93,10 @@ The pre-documentation build deliberately omits **Getting Started**, because it h
 9. In both modes, test a tab and another control character. Confirm visible `\t` or `\uXXXX` text appears.
 10. Hold Ctrl or Alt while triggering a combo for more than one second. Confirm insertion is refused, the keyword remains intact, and no modifier remains stuck.
 11. Restart after changing the multiline preference and confirm `Data/Settings.ini` contains the persisted setting and all application data remains under `Data`.
-12. At Windows display scaling 100%, 125%, and 150%, open every Preferences pane in both the light and dark themes. Check every checkbox, radio button, combo box, shortcut field, spin box, and button—especially Combos defaults/manual shortcuts and Advanced delay/Restore Combo Backup—for complete text, unmistakable checked state, distinct enabled/disabled state, clear selection, and visible keyboard focus. Confirm there are no Preferences Export or Import buttons. If Windows text size is separately enlarged, repeat at that setting.
+12. At Windows display scaling 100%, 125%, and 150%, open every Preferences pane in both the light and dark themes. Check every checkbox, radio button, combo box, shortcut field, spin box, and button—especially Combos defaults/manual shortcuts and the Advanced delay control—for complete text, unmistakable checked state, distinct enabled/disabled state, clear selection, and visible keyboard focus. Confirm there are no backup/restore or Preferences Export/Import controls. If Windows text size is separately enlarged, repeat at that setting.
 13. With Windows Dark, select Beeftext Light; with Windows Light, select Beeftext Dark. In each combination, inspect File, Groups, Combos, Advanced, Help, dynamic/context, and tray menus. Confirm the Beeftext theme wins and normal, hovered/selected, disabled, separator, shortcut, and keyboard-focus states remain readable and distinct.
-14. Confirm File contains **Back Up Combos…** and **Restore Combos…**, Advanced no longer contains those commands, and the file dialogs are titled **Back Up Combos** and **Restore Combos**. Save a backup with the **Combo backup files (`*.btbackup`)** filter, inspect a copy, and confirm its root contains `fileFormatVersion`, `groups`, and `combos` rather than application settings. Restore it and confirm the replacement warning appears. Confirm Advanced Preferences says **Automatic combo backup** and **Restore Combo Backup…**.
-15. Open Project Documentation, Release Notes, Report Bug, every About-dialog link, About Variables link, Supported file formats link, and Other languages link. Confirm Lean project/help links use `jubalslone/Beeftext`; confirm every retained upstream link is visibly labeled as upstream attribution or legacy Beeftext v7.2. Confirm Help has no Getting Started item and About remains intentionally unbranded for this pass.
-16. Close the main window and confirm the tray app remains running. Then choose **Exit** and confirm `Beeftext.exe` terminates.
-17. With a network monitor if available, launch the app and open Preferences. Confirm there is no request to the Beeftext update service.
+14. Confirm File and Preferences contain no backup, restore, or settings-export commands. Confirm the Combos portability section contains one **Import Combos…** and one **Export Combos…** command, with no separate selected/all export actions. With no combos, confirm Export is disabled. With one and then several selected combos, confirm the export dialog shows the correct **Selected combos (N)** count and also offers **All combos (N)**. Export each scope, confirm the filename defaults to `Lean-Beeftext-Combos.txt`, and confirm the `.txt` file is readable JSON containing only `format`, `version`, `groups`, and `combos` at its root.
+15. Import a Lean `.txt` export and confirm combo fields, group relationships, and empty groups round-trip. Confirm existing groups are reused by UUID or exact name and new groups are created. Import representative upstream `.json` and `.csv` exports into a chosen group. Try malformed `.txt`, unsupported, and `.btbackup` files and confirm each fails clearly without partially importing data.
+16. Open Project Documentation, Release Notes, Report Bug, every About-dialog link, About Variables link, Supported file formats link, and Other languages link. Confirm Lean project/help links use `jubalslone/Beeftext`; confirm every retained upstream link is visibly labeled as upstream attribution or legacy Beeftext v7.2. Confirm Help has no Getting Started item and About remains intentionally unbranded for this pass.
+17. Close the main window and confirm the tray app remains running. Then choose **Exit** and confirm `Beeftext.exe` terminates.
+18. With a network monitor if available, launch the app and open Preferences. Confirm there is no request to the Beeftext update service.

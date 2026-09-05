@@ -4,14 +4,21 @@
 
 
 #include "../TLFSafeBuild.h"
+#include "../Combo/ComboPortability.h"
 
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSettings>
+#include <QSet>
 #include <QStringList>
 #include <QTemporaryDir>
+#include <QUuid>
 
 
 namespace {
@@ -269,6 +276,197 @@ void testMultilinePreferencePersistence() {
 }
 
 
+QJsonObject testGroup(QString const &uuid, QString const &name) {
+	return QJsonObject {
+		{ "uuid", uuid },
+		{ "name", name },
+		{ "description", QString("Test group") },
+		{ "creationDateTime", QString("2026-09-05T12:00:00.000") },
+		{ "modificationDateTime", QString("2026-09-05T12:00:00.000") },
+		{ "enabled", true },
+	};
+}
+
+
+QJsonObject testCombo(QString const &uuid, QString const &keyword, QString const &groupUuid) {
+	return QJsonObject {
+		{ "uuid", uuid },
+		{ "name", keyword },
+		{ "keyword", keyword },
+		{ "snippet", QString("Snippet for %1").arg(keyword) },
+		{ "description", QString("Test combo") },
+		{ "matchingMode", 0 },
+		{ "caseSensitivity", 0 },
+		{ "group", groupUuid },
+		{ "creationDateTime", QString("2026-09-05T12:00:00.000") },
+		{ "modificationDateTime", QString("2026-09-05T12:00:00.000") },
+		{ "enabled", true },
+	};
+}
+
+
+bool writeTestFile(QString const &path, QByteArray const &data) {
+	QFile file(path);
+	if (!file.open(QIODevice::WriteOnly))
+		return false;
+	return file.write(data) == data.size();
+}
+
+
+void testComboExportBundle() {
+	QString const groupAUuid = QUuid::createUuid().toString();
+	QString const groupBUuid = QUuid::createUuid().toString();
+	QJsonArray const groups = {
+		testGroup(groupAUuid, "Group A"),
+		testGroup(groupBUuid, "Group B"),
+	};
+	QJsonObject const comboOne = testCombo(QUuid::createUuid().toString(), "one", groupAUuid);
+	QJsonObject const comboTwo = testCombo(QUuid::createUuid().toString(), "two", groupAUuid);
+	QJsonObject const comboThree = testCombo(QUuid::createUuid().toString(), "three", groupBUuid);
+
+	QJsonArray const oneSelected = { comboOne };
+	QJsonDocument const oneBundle = combo_portability::createLeanBundle(oneSelected,
+		combo_portability::referencedGroups(oneSelected, groups));
+	expect(oneBundle.object().value("combos").toArray().size() == 1,
+		"one selected combo is exported through the shared bundle path");
+	expect(oneBundle.object().value("groups").toArray().size() == 1,
+		"one selected combo carries its group");
+
+	QJsonArray const multipleSelected = { comboOne, comboThree };
+	QJsonDocument const multipleBundle = combo_portability::createLeanBundle(multipleSelected,
+		combo_portability::referencedGroups(multipleSelected, groups));
+	expect(multipleBundle.object().value("combos").toArray().size() == 2,
+		"multiple selected combos are exported through the shared bundle path");
+	expect(multipleBundle.object().value("groups").toArray().size() == 2,
+		"multiple selected combos carry every referenced group");
+
+	QJsonArray const allCombos = { comboOne, comboTwo, comboThree };
+	QJsonDocument const allBundle = combo_portability::createLeanBundle(allCombos, groups);
+	expect(allBundle.object().value("combos").toArray().size() == 3,
+		"all combos are exported through the shared bundle path");
+	expect(allBundle.object().value("groups").toArray() == groups,
+		"an all-combos export preserves the complete group list, including empty groups");
+	expectText(allBundle.object().value("format").toString(), "lean-beeftext-combos",
+		"Lean combo bundle is self-identifying");
+	expect(allBundle.object().value("version").toInt() == 1,
+		"Lean combo bundle has schema version 1");
+	QSet<QString> const keys = { "format", "version", "groups", "combos" };
+	QSet<QString> actualKeys;
+	for (QString const &key: allBundle.object().keys())
+		actualKeys.insert(key);
+	expect(actualKeys == keys, "Lean combo bundle contains no preferences or settings data");
+}
+
+
+void testComboPortabilityFiles() {
+	QTemporaryDir directory;
+	expect(directory.isValid(), "temporary combo-portability directory is available");
+	if (!directory.isValid())
+		return;
+
+	QString const groupUuid = QUuid::createUuid().toString();
+	QJsonArray const groups = { testGroup(groupUuid, "Clients") };
+	QJsonArray const combos = { testCombo(QUuid::createUuid().toString(), "client", groupUuid) };
+	QString const leanPath = QDir(directory.path()).absoluteFilePath("Lean-Beeftext-Combos.txt");
+	QString error;
+	expect(combo_portability::saveLeanBundle(leanPath, combos, groups, &error),
+		QString("Lean .txt export succeeds: %1").arg(error));
+	QFile leanFile(leanPath);
+	expect(leanFile.open(QIODevice::ReadOnly), "Lean .txt export can be reopened");
+	QJsonParseError parseError;
+	QJsonDocument const exportedDocument = QJsonDocument::fromJson(leanFile.readAll(), &parseError);
+	expect(parseError.error == QJsonParseError::NoError && exportedDocument.isObject(),
+		"Lean .txt export contains valid UTF-8 JSON");
+
+	QJsonDocument importedDocument;
+	bool preserveGroups = false;
+	error.clear();
+	expect(combo_portability::loadJsonForImport(leanPath, 10, importedDocument, preserveGroups, &error),
+		QString("Lean .txt import succeeds: %1").arg(error));
+	expect(preserveGroups, "Lean .txt import requests group preservation");
+	expect(importedDocument.object().value("combos").toArray() == combos,
+		"Lean .txt round trip preserves combo records");
+	expect(importedDocument.object().value("groups").toArray() == groups,
+		"Lean .txt round trip preserves group records and relationships");
+
+	QJsonObject legacyRoot;
+	legacyRoot.insert("fileFormatVersion", 10);
+	legacyRoot.insert("groups", QJsonArray());
+	legacyRoot.insert("combos", combos);
+	QString const legacyJsonPath = QDir(directory.path()).absoluteFilePath("upstream.json");
+	expect(writeTestFile(legacyJsonPath, QJsonDocument(legacyRoot).toJson()),
+		"legacy upstream JSON fixture is written");
+	preserveGroups = true;
+	expect(combo_portability::loadJsonForImport(legacyJsonPath, 10, importedDocument, preserveGroups, &error),
+		"legacy upstream JSON remains accepted");
+	expect(!preserveGroups, "legacy upstream JSON keeps destination-group import behavior");
+
+	QString const legacyCsvPath = QDir(directory.path()).absoluteFilePath("upstream.csv");
+	expect(writeTestFile(legacyCsvPath, "legacy,Legacy snippet,Legacy name\n"),
+		"legacy upstream CSV fixture is written");
+	QVector<QStringList> rows;
+	expect(combo_portability::loadLegacyCsvRows(legacyCsvPath, rows, &error),
+		"legacy upstream CSV remains accepted");
+	expect(rows.size() == 1 && rows[0] == QStringList({ "legacy", "Legacy snippet", "Legacy name" }),
+		"legacy upstream CSV fields retain their compatible meaning");
+
+	QJsonDocument const sentinel(QJsonObject { { "sentinel", true } });
+	importedDocument = sentinel;
+	preserveGroups = true;
+	QString const malformedPath = QDir(directory.path()).absoluteFilePath("malformed.txt");
+	expect(writeTestFile(malformedPath, "{ definitely-not-json"), "malformed Lean fixture is written");
+	expect(!combo_portability::loadJsonForImport(malformedPath, 10, importedDocument, preserveGroups, &error),
+		"malformed Lean .txt fails clearly");
+	expect(!error.isEmpty(), "malformed Lean .txt provides an error message");
+	expect(importedDocument == sentinel && preserveGroups,
+		"malformed Lean .txt does not partially change import output");
+
+	QString const unsupportedPath = QDir(directory.path()).absoluteFilePath("old.btbackup");
+	expect(writeTestFile(unsupportedPath, "ignored"), "unsupported fixture is written");
+	error.clear();
+	expect(!combo_portability::loadJsonForImport(unsupportedPath, 10, importedDocument, preserveGroups, &error),
+		"unsupported files are rejected");
+	expect(!error.isEmpty() && importedDocument == sentinel && preserveGroups,
+		"unsupported files fail without partial import output");
+}
+
+
+QString readSourceFile(QString const &relativePath) {
+	QFile file(QDir(QStringLiteral(BEEFTEXT_SOURCE_DIR)).absoluteFilePath(relativePath));
+	if (!file.open(QIODevice::ReadOnly)) {
+		expect(false, QString("UI source can be read: %1").arg(relativePath));
+		return QString();
+	}
+	return QString::fromUtf8(file.readAll());
+}
+
+
+void testRestrictedPortabilityUiSurface() {
+	QString const mainWindowUi = readSourceFile("MainWindow.ui");
+	expect(!mainWindowUi.contains("actionBackup") && !mainWindowUi.contains("actionRestore")
+		&& !mainWindowUi.contains("Back Up Combos") && !mainWindowUi.contains("Restore Combos"),
+		"File menu exposes no backup or restore actions");
+
+	QString const advancedUi = readSourceFile("Preferences/Panes/PrefPaneAdvanced.ui");
+	expect(!advancedUi.contains("Automatic combo backup") && !advancedUi.contains("Restore Combo Backup")
+		&& !advancedUi.contains("checkAutoBackup"),
+		"Advanced Preferences exposes no automatic-backup workflow");
+
+	QString const tableSource = readSourceFile("Combo/ComboTableWidget.cpp");
+	expect(tableSource.contains("&Import Combos…") && tableSource.contains("&Export Combos…"),
+		"Combos portability surface exposes Import Combos and Export Combos");
+	expect(tableSource.contains("QMenu *ComboTableWidget::portabilityMenu")
+		&& readSourceFile("MainWindow.cpp").contains("portabilityMenu(this)"),
+		"top-level Combos menu uses the dedicated two-command portability surface");
+	expect(!tableSource.contains("Export All Combos") && !tableSource.contains("Export Selected Combo")
+		&& !tableSource.contains("actionExportAllCombos_"),
+		"separate selected/all export actions are absent");
+	expect(!readSourceFile("Preferences/PreferencesDialog.ui").contains("Export Preferences")
+		&& !readSourceFile("Preferences/PreferencesDialog.ui").contains("Import Preferences"),
+		"Preferences export/import controls remain absent");
+}
+
+
 } // anonymous namespace
 
 
@@ -280,6 +478,9 @@ int main(int argc, char *argv[]) {
     testBlockedControlsInBothModes();
     testCursorPlan();
     testMultilinePreferencePersistence();
+	testComboExportBundle();
+	testComboPortabilityFiles();
+	testRestrictedPortabilityUiSurface();
     if (failureCount == 0)
         qInfo() << "All TLF restricted-build tests passed.";
     return failureCount == 0 ? 0 : 1;

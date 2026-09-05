@@ -57,7 +57,6 @@ private: // member functions
     void changeEvent(QEvent *event) override; ///< Change event handler
     void showWindow(); ///< Ensure the window is visible, active and on top
     void restoreWindowGeometry(); ///< Restore the geometry of the window.
-    void restoreComboBackup(QString const &path); ///< Restore combo and group data from a backup file.
 
 private slots:
     void onSystemTrayIconActivated(QSystemTrayIcon::ActivationReason reason); ///< Slot for the activation of the system tray icon
@@ -66,8 +65,6 @@ private slots:
     void onActionShowPreferencesDialog(); ///< Slot for the 'Show Preferences dialog' action
     static void onActionOpenLogFile(); ///< Slot for the 'Open Log File' action
     static void onActionShowLogWindow(); ///< Slot for the 'Show Log Window action.
-    void onActionBackUpCombos(); ///< Back up the current combo and group data.
-    void onActionRestoreCombos(); ///< Restore combo and group data from a selected backup.
     void onActionGenerateCheatSheet(); ///< Slot for the 'Generate Cheat Sheet' action.
     void onWriteDebugLogFileChanged(bool value) const; ///< Slot for the change of the 'Write debug log file' preference.
 

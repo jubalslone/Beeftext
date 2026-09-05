@@ -32,7 +32,6 @@ extern QString const kBeeftextWikiHomeUrl; ///< The URL of the Beeftext wiki
 extern QString const kBeeftextWikiVariablesUrl; ///< The URL of the page about variables in the Beeftext wiki
 extern QString const kBeeftextReleasesPagesUrl; ///< The URL of the page for the project releases on GitHub
 extern QString const kBeeftextIssueTrackerUrl; ///< The URL of the page for the issue tracker on GitHub.
-extern QString const backupFileExtension; ///< The extension for backup files.
 extern QString const kKeyVariableRegExpStr; ///< A regular expression matching the #{key:} variable.
 extern QString const kShortcutVariableRegExpStr; ///< A regular expression matching the #{shortcut:} variable.
 extern QString const kDelayVariableRegExpStr; ///< A regular expression matching the #{delay:} variable.

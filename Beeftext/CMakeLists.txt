@@ -78,9 +78,6 @@ add_executable(Beeftext WIN32
    WaveSound.h
    Backup/BackupManager.cpp
    Backup/BackupManager.h
-   Backup/BackupRestoreDialog.cpp
-   Backup/BackupRestoreDialog.h
-   Backup/BackupRestoreDialog.ui
    Clipboard/ClipboardManager.cpp
    Clipboard/ClipboardManager.h
    Clipboard/ClipboardManagerDefault.cpp
@@ -96,6 +93,8 @@ add_executable(Beeftext WIN32
    Combo/ComboDialog.ui
    Combo/ComboEditor.cpp
    Combo/ComboEditor.h
+   Combo/ComboExportDialog.cpp
+   Combo/ComboExportDialog.h
    Combo/ComboFrame.cpp
    Combo/ComboFrame.h
    Combo/ComboFrame.ui
@@ -108,6 +107,8 @@ add_executable(Beeftext WIN32
    Combo/ComboList.h
    Combo/ComboManager.cpp
    Combo/ComboManager.h
+   Combo/ComboPortability.cpp
+   Combo/ComboPortability.h
    Combo/ComboSortFilterProxyModel.cpp
    Combo/ComboSortFilterProxyModel.h
    Combo/ComboTableWidget.cpp
@@ -215,7 +216,11 @@ if(BUILD_TESTING)
       Tests/TLFSafeBuildTests.cpp
       TLFSafeBuild.cpp
       TLFSafeBuild.h
+      Combo/ComboPortability.cpp
+      Combo/ComboPortability.h
    )
    target_link_libraries(TLFSafeBuildTests Qt6::Core)
+   target_link_libraries(TLFSafeBuildTests XMiLib)
+   target_compile_definitions(TLFSafeBuildTests PRIVATE BEEFTEXT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
    add_test(NAME TLFSafeBuildTests COMMAND TLFSafeBuildTests)
 endif()
