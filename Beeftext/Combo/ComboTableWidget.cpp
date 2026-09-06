@@ -121,6 +121,9 @@ QMenu *ComboTableWidget::menu(QWidget *parent) const {
     menu->addSeparator();
     menu->addAction(actionSelectAll_);
     menu->addAction(actionDeselectAll_);
+    menu->addSeparator();
+    menu->addAction(actionImportCombos_);
+    menu->addAction(actionExportCombos_);
     menu->setProperty(kPropMoveToMenu, QVariant::fromValue(moveToMenu));
     connect(menu, &QMenu::aboutToShow, this, &ComboTableWidget::onContextMenuAboutToShow);
     connect(moveToMenu, &QMenu::triggered, this, &ComboTableWidget::onMoveToGroupMenuTriggered);
@@ -624,19 +627,7 @@ void ComboTableWidget::onActionExportCombos() {
 
 
 //****************************************************************************************************************************************************
-/// \param[in] parent The parent widget of the menu.
-/// \return The top-level Combos menu containing the complete user-facing portability model.
-//****************************************************************************************************************************************************
-QMenu *ComboTableWidget::portabilityMenu(QWidget *parent) const {
-	QMenu *menu = new QMenu(menuTitle(), parent);
-	menu->addAction(actionImportCombos_);
-	menu->addAction(actionExportCombos_);
-	return menu;
-}
-
-
-//****************************************************************************************************************************************************
-// 
+//
 //****************************************************************************************************************************************************
 void ComboTableWidget::onActionImportCombos() {
     this->runComboImportDialog();

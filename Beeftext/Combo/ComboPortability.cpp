@@ -67,7 +67,7 @@ QString exportFileDialogFilter() {
 
 
 QString importFileDialogFilter() {
-	return QObject::tr("Lean Beeftext combo files (*.txt);;Supported combo files (*.txt *.json *.csv);;"
+	return QObject::tr("Supported combo files (*.txt *.json *.csv);;Lean Beeftext combo files (*.txt);;"
 		"Legacy Beeftext JSON files (*.json);;Legacy Beeftext CSV files (*.csv);;All files (*.*)");
 }
 

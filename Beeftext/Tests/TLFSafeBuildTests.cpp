@@ -455,9 +455,35 @@ void testRestrictedPortabilityUiSurface() {
 	QString const tableSource = readSourceFile("Combo/ComboTableWidget.cpp");
 	expect(tableSource.contains("&Import Combos…") && tableSource.contains("&Export Combos…"),
 		"Combos portability surface exposes Import Combos and Export Combos");
-	expect(tableSource.contains("QMenu *ComboTableWidget::portabilityMenu")
-		&& readSourceFile("MainWindow.cpp").contains("portabilityMenu(this)"),
-		"top-level Combos menu uses the dedicated two-command portability surface");
+	QString const mainWindowSource = readSourceFile("MainWindow.cpp");
+	expect(!tableSource.contains("portabilityMenu")
+		&& mainWindowSource.contains("comboTableWidget()->menu(this)"),
+		"top-level Combos menu uses the complete combo-management menu");
+	expect(tableSource.contains("menu->addAction(actionNewCombo_)")
+		&& tableSource.contains("menu->addAction(actionEditCombo_)")
+		&& tableSource.contains("menu->addAction(actionDuplicateCombo_)")
+		&& tableSource.contains("menu->addAction(actionDeleteCombo_)")
+		&& tableSource.contains("menu->addAction(actionCopySnippet_)")
+		&& tableSource.contains("menu->addAction(actionEnableDisableCombo_)")
+		&& tableSource.contains("menu->addAction(actionSelectAll_)")
+		&& tableSource.contains("menu->addAction(actionDeselectAll_)"),
+		"normal combo-management actions remain on the shared Combos menu");
+	qint32 const deselectPosition = tableSource.indexOf("menu->addAction(actionDeselectAll_)");
+	qint32 const importPosition = tableSource.indexOf("menu->addAction(actionImportCombos_)");
+	qint32 const exportPosition = tableSource.indexOf("menu->addAction(actionExportCombos_)");
+	expect(deselectPosition >= 0 && importPosition > deselectPosition && exportPosition > importPosition
+		&& tableSource.count("menu->addAction(actionImportCombos_)") == 1
+		&& tableSource.count("menu->addAction(actionExportCombos_)") == 1,
+		"one Import and one Export workflow appear at the bottom of the complete Combos menu");
+	expect(tableSource.contains("buttonCombos->setMenu(this->menu(this))")
+		&& readSourceFile("Combo/ComboTableWidget.ui").contains("name=\"buttonCombos\""),
+		"the in-window Combos button remains visible and uses the complete shared menu");
+	expect(combo_portability::importFileDialogFilter().startsWith(
+		"Supported combo files (*.txt *.json *.csv);;Lean Beeftext combo files (*.txt);;"
+		"Legacy Beeftext JSON files (*.json);;Legacy Beeftext CSV files (*.csv);;All files (*.*)"),
+		"the import picker defaults to all supported combo formats");
+	expect(!mainWindowSource.contains("setDefaultAction("),
+		"the tray Open action is rendered as an ordinary menu action");
 	expect(!tableSource.contains("Export All Combos") && !tableSource.contains("Export Selected Combo")
 		&& !tableSource.contains("actionExportAllCombos_"),
 		"separate selected/all export actions are absent");

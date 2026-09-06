@@ -28,7 +28,7 @@
 MainWindow::MainWindow() {
     ui_.setupUi(this);
     groupsMenu_ = ui_.frameCombos->groupListWidget()->menu(this);
-	combosMenu_ = ui_.frameCombos->comboTableWidget()->portabilityMenu(this);
+    combosMenu_ = ui_.frameCombos->comboTableWidget()->menu(this);
     this->setupSystemTrayIcon();
     this->menuBar()->insertMenu(ui_.menu_Advanced->menuAction(), groupsMenu_);
     this->menuBar()->insertMenu(ui_.menu_Advanced->menuAction(), combosMenu_);
@@ -131,7 +131,6 @@ void MainWindow::setupSystemTrayIcon() {
     QAction *action = new QAction(tr("Open Beeftext"), this);
     connect(action, &QAction::triggered, [this]() { this->showWindow(); });
     menu->addAction(action);
-    menu->setDefaultAction(action);
 
     action = new QAction(tr("New Combo"), this);
     connect(action, &QAction::triggered, [this]() { ui_.frameCombos->comboTableWidget()->onActionNewCombo(); });
