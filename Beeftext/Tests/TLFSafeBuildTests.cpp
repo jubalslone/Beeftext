@@ -14,6 +14,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QSet>
 #include <QStringList>
@@ -570,7 +571,8 @@ void testProductFinishingSurface() {
 	QString const readme = readRepositoryFile("README.md");
 	QString const securityModel = readRepositoryFile("SECURITY_MODEL.md");
 	QString const notices = readRepositoryFile("THIRD_PARTY_NOTICES.md");
-	expect(readme.contains("## Variables\n")
+	QRegularExpression const variablesHeading(R"((?:^|\r?\n)## Variables(?:\r?\n|$))");
+	expect(readme.contains(variablesHeading)
 		&& readme.contains("Lean Beeftext 1.0.0")
 		&& readme.contains("Des Moines, IA 50309"),
 		"README contains the Variables anchor and Lean product guidance");
