@@ -29,7 +29,7 @@ PrefPaneAdvanced::PrefPaneAdvanced(QWidget *parent)
         ui_.buttonChangeCustomPowershellVersion->setVisible(false);
     }
     ui_.spinDelayBetweenKeystrokes->setRange(PreferencesManager::minDelayBetweenKeystrokesMs(), PreferencesManager::maxDelayBetweenKeystrokesMs());
-    if (isInPortableMode()) {
+    if (isInPortableMode() || constants::kRestrictedBuild) {
         ui_.frameComboListFolder->setVisible(false);
     }
 

@@ -233,11 +233,38 @@ QString getBuildInfo() {
 
 
 //****************************************************************************************************************************************************
-/// \return The location of the local storage folder for the application
+/// \return The location of restorable application data.
 //****************************************************************************************************************************************************
 QString appDataDir() {
+    if (isInPortableMode())
+        return portableModeDataFolderPath();
+    QString const documents = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    return documents.isEmpty() ? QString() : QDir(documents).absoluteFilePath("Lean Beeftext");
+}
+
+
+//****************************************************************************************************************************************************
+/// \return The location of volatile, machine-local application data.
+//****************************************************************************************************************************************************
+QString machineLocalDataDir() {
     return isInPortableMode() ? portableModeDataFolderPath() :
-           QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+        QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+}
+
+
+//****************************************************************************************************************************************************
+/// \return The installed-mode preferences file path.
+//****************************************************************************************************************************************************
+QString installedSettingsFilePath() {
+    return QDir(appDataDir()).absoluteFilePath("Settings.ini");
+}
+
+
+//****************************************************************************************************************************************************
+/// \return The folder containing non-executable migration recovery copies.
+//****************************************************************************************************************************************************
+QString migrationBackupFolderPath() {
+    return QDir(appDataDir()).absoluteFilePath("Migration Backups");
 }
 
 
@@ -261,7 +288,7 @@ QString userTranslationRootFolderPath() {
 /// \return The absolute path of the log file
 //****************************************************************************************************************************************************
 QString logFilePath() {
-    return QDir(appDataDir()).absoluteFilePath("log.txt");
+    return QDir(machineLocalDataDir()).absoluteFilePath("log.txt");
 }
 
 
@@ -270,7 +297,7 @@ QString logFilePath() {
 //****************************************************************************************************************************************************
 QString backupFolderPath() {
     QString defaultPath = defaultBackupFolderPath();
-    if (isInPortableMode())
+    if (isInPortableMode() || constants::kRestrictedBuild)
         return defaultPath;
 
     PreferencesManager const &prefs = PreferencesManager::instance();
@@ -285,7 +312,9 @@ QString backupFolderPath() {
 /// \return The default path of the backup folder
 //****************************************************************************************************************************************************
 QString defaultBackupFolderPath() {
-    return QDir(appDataDir()).absoluteFilePath("Backup");
+    // Preserve the established portable Data/Backup layout exactly. The
+    // installed name is plural for clarity in the user-restorable data folder.
+    return QDir(appDataDir()).absoluteFilePath(isInPortableMode() ? "Backup" : "Backups");
 }
 
 

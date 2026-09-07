@@ -5,6 +5,7 @@
 
 #include "../TLFSafeBuild.h"
 #include "../Combo/ComboPortability.h"
+#include "../Migration/LegacyMigrationCore.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -526,10 +527,10 @@ void testProductFinishingSurface() {
 		&& readSourceFile("CMakeLists.txt").contains("VERSION 1.0.0")
 		&& readSourceFile("Beeftext.rc").contains("VERSION_STRING \"1.0.0\\0\""),
 		"public metadata is 1.0.0 while the disabled updater keeps its two-part upstream compatibility value");
-	expect(constantsSource.contains("kSettingsApplicationName = \"Beeftext\"")
-		&& constantsSource.contains("kOrganizationName = \"beeftext.org\"")
-		&& constantsHeader.contains("kSettingsApplicationName"),
-		"the legacy settings and AppLocalData namespace is intentionally preserved");
+    expect(constantsSource.contains("kSettingsApplicationName = \"Lean Beeftext\"")
+        && constantsSource.contains("kOrganizationName = \"Jubal Slone\"")
+        && constantsHeader.contains("kSettingsApplicationName"),
+        "installed settings and AppLocalData use permanent Lean identities");
 	expect(constantsSource.contains("https://github.com/jubalslone/Beeftext#variables"),
 		"About Variables uses the README Variables anchor");
 
@@ -587,7 +588,7 @@ void testProductFinishingSurface() {
 	expect(entryPointSource.contains("setApplicationName(constants::kSettingsApplicationName)")
 		&& entryPointSource.contains("setApplicationDisplayName(constants::kApplicationName)")
 		&& entryPointSource.contains("setApplicationVersion(constants::kProductVersion)"),
-		"the public display name and version change without moving existing AppLocalData");
+        "the public display name and permanent Lean settings identity are applied");
 	expect(entryPointSource.contains("singleInstanceApp(constants::kSingleInstanceIdentifier)")
 		&& !entryPointSource.contains("\"BeeftextSingleInstanceIdentifier\""),
 		"single-instance enforcement uses the Lean identity instead of the upstream identifier");
@@ -657,6 +658,95 @@ void testProductFinishingSurface() {
 }
 
 
+void testInstalledStorageAndMigrationSafety() {
+    QString const globalsSource = readSourceFile("BeeftextGlobals.cpp");
+    QString const preferencesSource = readSourceFile("Preferences/PreferencesManager.cpp");
+    QString const autoStartSource = readSourceFile("AutoStart.cpp");
+    QString const migrationSource = readSourceFile("Migration/LegacyMigrationManager.cpp");
+    expect(globalsSource.contains("QStandardPaths::DocumentsLocation")
+        && globalsSource.contains("Lean Beeftext")
+        && globalsSource.contains("installedSettingsFilePath")
+        && preferencesSource.contains("globals::installedSettingsFilePath(), QSettings::IniFormat"),
+        "installed restorable data and explicit INI settings are rooted under the Documents known folder");
+    expect(globalsSource.contains("QStandardPaths::AppLocalDataLocation")
+        && globalsSource.contains("machineLocalDataDir")
+        && readSourceFile("LastUse/ComboLastUseFile.cpp").contains("machineLocalDataDir")
+        && readSourceFile("LastUse/EmojiLastUseFile.cpp").contains("machineLocalDataDir"),
+        "logs and last-use caches use Lean machine-local storage");
+    expect(autoStartSource.contains("QCoreApplication::applicationFilePath()")
+        && !autoStartSource.contains("kKeyAppExePath")
+        && migrationSource.contains("AppExePath"),
+        "autostart uses the current executable while legacy AppExePath is source evidence only");
+    expect(readSourceFile("Combo/ComboList.cpp").contains("QSaveFile file(path)")
+        && readSourceFile("Combo/ComboList.cpp").contains("file.commit()"),
+        "live combo writes use atomic replacement");
+    expect(preferencesSource.contains("globals::portableModeSettingsFilePath(), QSettings::IniFormat")
+        && globalsSource.contains("appDir.absoluteFilePath(\"Data\")")
+        && globalsSource.contains("isInPortableMode() ? \"Backup\" : \"Backups\""),
+        "portable Settings.ini, Data, and Data/Backup behavior remains unchanged");
+
+    QTemporaryDir temporaryDirectory;
+    expect(temporaryDirectory.isValid(), "migration safety test directory is available");
+    if (!temporaryDirectory.isValid())
+        return;
+    QDir root(temporaryDirectory.path());
+    QString const portable = root.absoluteFilePath("Beeftext Portable");
+    QDir().mkpath(QDir(portable).absoluteFilePath("Data"));
+    QFile executable(QDir(portable).absoluteFilePath("Beeftext.exe"));
+    expect(executable.open(QIODevice::WriteOnly) && executable.write("fixture") > 0,
+        "portable fixture executable is created");
+    executable.close();
+    QFile beacon(QDir(portable).absoluteFilePath("Portable.bin"));
+    expect(beacon.open(QIODevice::WriteOnly), "portable fixture beacon is created");
+    beacon.close();
+    QFile combos(QDir(portable).absoluteFilePath("Data/comboList.json"));
+    expect(combos.open(QIODevice::WriteOnly) && combos.write("{\"combos\":[]}") > 0,
+        "portable fixture combo library is created");
+    combos.close();
+    QString comboPath;
+    QString cleanupRoot;
+    expect(migration::isStrongPortableCandidate(portable, &comboPath, &cleanupRoot)
+        && QFileInfo(comboPath).fileName() == "comboList.json"
+        && QFileInfo(cleanupRoot).fileName() == "Beeftext Portable",
+        "strong portable detection requires the expected beacon/data layout");
+    QFile::remove(QDir(portable).absoluteFilePath("Portable.bin"));
+    expect(!migration::isStrongPortableCandidate(portable),
+        "an arbitrary Beeftext.exe plus data is rejected without a portable beacon");
+
+    expect(migration::isBroadCleanupRoot(root.absolutePath(), { root.absolutePath() })
+        && !migration::isBroadCleanupRoot(portable, { root.absolutePath() }),
+        "broad protected roots are refused while a dedicated child folder is eligible");
+    expect(migration::installedMetadataIsConsistent("Beeftext", "Xavier Michelon", portable,
+        QDir(portable).absoluteFilePath("uninstall.exe"), QDir(portable).absoluteFilePath("Beeftext.exe"))
+        && !migration::installedMetadataIsConsistent("Lean Beeftext", "Jubal Slone", portable,
+            QDir(portable).absoluteFilePath("uninstall.exe"), QDir(portable).absoluteFilePath("Beeftext.exe")),
+        "installed cleanup metadata accepts upstream identity and rejects Lean identity");
+
+    QList<QList<qsizetype>> const groups = migration::groupSourcesByContent({ "same", "different", "same" });
+    expect(groups.size() == 2 && groups[0] == QList<qsizetype>({ 0, 2 }) && groups[1] == QList<qsizetype>({ 1 }),
+        "identical libraries group together while differing libraries remain separate choices");
+    migration::ValidationResult validation;
+    validation.snapshotCreated = validation.parsed = validation.persisted = validation.reloaded = true;
+    expect(!migration::cleanupAllowed(validation), "cleanup is refused until correspondence validation succeeds");
+    validation.corresponds = true;
+    expect(migration::cleanupAllowed(validation), "cleanup is allowed only after the full validation sequence");
+    expect(migration::shouldRunMigration(false, false, migration::EState::NeverChecked)
+        && !migration::shouldRunMigration(true, false, migration::EState::NeverChecked)
+        && !migration::shouldRunMigration(false, true, migration::EState::NeverChecked)
+        && !migration::shouldRunMigration(false, false, migration::EState::ImportCompleted),
+        "migration is installed-only, first-run, non-overwriting, and idempotent");
+    expect(migrationSource.contains("migrateSource(selected, validation, error)")
+        && migrationSource.contains("cleanupAllowed(validation)")
+        && migrationSource.contains("ImportCompleted")
+        && migrationSource.indexOf("settings.setValue(kMigrationStateKey, int(migration::EState::ImportCompleted))")
+            < migrationSource.indexOf("finishPendingCleanup(settings, false)"),
+        "the runtime persists successful import state before cleanup so retries cannot re-import");
+    expect(migrationSource.contains("QSettings legacySettings(\"beeftext.org\", \"Beeftext\")")
+        && !preferencesSource.contains("QSettings>(constants::kOrganizationName, constants::kSettingsApplicationName)"),
+        "upstream preferences are read only as migration clues and are not adopted as Lean preferences");
+}
+
+
 } // anonymous namespace
 
 
@@ -672,6 +762,7 @@ int main(int argc, char *argv[]) {
 	testComboPortabilityFiles();
 	testRestrictedPortabilityUiSurface();
 	testProductFinishingSurface();
+    testInstalledStorageAndMigrationSafety();
     if (failureCount == 0)
         qInfo() << "All Lean Beeftext security-model tests passed.";
     return failureCount == 0 ? 0 : 1;

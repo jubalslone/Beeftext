@@ -226,6 +226,8 @@
       <Filter>Snippet</Filter>
     </ClCompile>
     <ClCompile Include="KeyboardMapper.cpp" />
+    <ClCompile Include="Migration\LegacyMigrationCore.cpp" />
+    <ClCompile Include="Migration\LegacyMigrationManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h" />
@@ -254,6 +256,8 @@
       <Filter>Combo</Filter>
     </ClInclude>
     <ClInclude Include="WaveSound.h" />
+    <ClInclude Include="Migration\LegacyMigrationCore.h" />
+    <ClInclude Include="Migration\LegacyMigrationManager.h" />
     <ClInclude Include="Combo\CaseSensitivity.h">
       <Filter>Combo</Filter>
     </ClInclude>

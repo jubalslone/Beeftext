@@ -25,6 +25,8 @@ HEADERS += ./BeeftextConstants.h \
     ./Combo/ComboPortability.h \
     ./Combo/ComboFrame.h \
     ./Combo/ComboTableWidget.h \
+    ./Migration/LegacyMigrationCore.h \
+    ./Migration/LegacyMigrationManager.h \
     ./Update/UpdateCheckWorker.h \
     ./Update/UpdateManager.h \
     ./Update/UpdateDialog.h \
@@ -61,6 +63,8 @@ SOURCES += ./AboutDialog.cpp \
     ./Combo/ComboSortFilterProxyModel.cpp \
     ./Combo/ComboKeywordValidator.cpp \
     ./Combo/ComboTableWidget.cpp \
+    ./Migration/LegacyMigrationCore.cpp \
+    ./Migration/LegacyMigrationManager.cpp \
     ./Combo/ComboVariable.cpp \
     ./Update/UpdateCheckWorker.cpp \
     ./Update/UpdateDialog.cpp \

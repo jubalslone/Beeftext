@@ -114,7 +114,7 @@
       <OutputFile>$(OutDir)\$(ProjectName).exe</OutputFile>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Winmm.lib;Shell32.lib;Ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <TargetMachine>MachineX64</TargetMachine>
       <AdditionalOptions> /SUBSYSTEM:WINDOWS</AdditionalOptions>
     </Link>
@@ -173,7 +173,7 @@
       <OutputFile>$(OutDir)\$(ProjectName).exe</OutputFile>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Winmm.lib;Shell32.lib;Ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <TargetMachine>MachineX64</TargetMachine>
       <AdditionalOptions> /SUBSYSTEM:WINDOWS</AdditionalOptions>
     </Link>
@@ -234,7 +234,7 @@
       <OutputFile>$(OutDir)\$(ProjectName).exe</OutputFile>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Winmm.lib;Shell32.lib;Ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <TargetMachine>MachineX64</TargetMachine>
       <AdditionalOptions> /SUBSYSTEM:WINDOWS</AdditionalOptions>
     </Link>
@@ -308,6 +308,8 @@
     <ClCompile Include="KeyboardMapper.cpp" />
     <ClCompile Include="LastUse\ComboLastUseFile.cpp" />
     <ClCompile Include="LastUse\EmojiLastUseFile.cpp" />
+    <ClCompile Include="Migration\LegacyMigrationCore.cpp" />
+    <ClCompile Include="Migration\LegacyMigrationManager.cpp" />
     <ClCompile Include="LatestVersionInfo.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainWindow.cpp" />
@@ -357,6 +359,8 @@
     <ClInclude Include="KeyboardMapper.h" />
     <ClInclude Include="LastUse\ComboLastUseFile.h" />
     <ClInclude Include="LastUse\EmojiLastUseFile.h" />
+    <ClInclude Include="Migration\LegacyMigrationCore.h" />
+    <ClInclude Include="Migration\LegacyMigrationManager.h" />
     <ClInclude Include="Picker\PickerSortFilterProxyModel.h" />
     <QtMoc Include="Picker\PickerWindow.h" />
     <ClInclude Include="Picker\PickerWindowMoverResizer.h" />

@@ -148,6 +148,10 @@ add_executable(Beeftext WIN32
    LastUse/ComboLastUseFile.h
    LastUse/EmojiLastUseFile.cpp
    LastUse/EmojiLastUseFile.h
+   Migration/LegacyMigrationCore.cpp
+   Migration/LegacyMigrationCore.h
+   Migration/LegacyMigrationManager.cpp
+   Migration/LegacyMigrationManager.h
    Picker/PickerItemDelegate.cpp
    Picker/PickerItemDelegate.h
    Picker/PickerModel.cpp
@@ -210,6 +214,8 @@ target_link_libraries(Beeftext Qt6::Widgets)
 target_link_libraries(Beeftext Qt6::Network)
 target_link_libraries(Beeftext XMiLib)
 target_link_libraries(Beeftext Winmm)
+target_link_libraries(Beeftext Shell32)
+target_link_libraries(Beeftext Ole32)
 
 if(BUILD_TESTING)
    add_executable(LeanSecurityModelTests
@@ -218,6 +224,8 @@ if(BUILD_TESTING)
       TLFSafeBuild.h
       Combo/ComboPortability.cpp
       Combo/ComboPortability.h
+      Migration/LegacyMigrationCore.cpp
+      Migration/LegacyMigrationCore.h
    )
    target_link_libraries(LeanSecurityModelTests Qt6::Core)
    target_link_libraries(LeanSecurityModelTests XMiLib)

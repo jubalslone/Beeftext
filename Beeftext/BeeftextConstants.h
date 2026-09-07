@@ -30,8 +30,8 @@ QColor constexpr blueBeeftextColor(0x25, 0x8c, 0xc0); ///< Return the blue color
 Qt::DateFormat constexpr kJsonExportDateFormat = Qt::ISODateWithMs; ///< The date/time export format used for JSon docs
 
 extern QString const kApplicationName; ///< The application name
-extern QString const kSettingsApplicationName; ///< Temporarily retained legacy identity for existing settings and AppLocalData.
-extern QString const kOrganizationName; ///< Temporarily retained legacy organization identity for existing settings and AppLocalData.
+extern QString const kSettingsApplicationName; ///< Stable Lean settings/application-data identity.
+extern QString const kOrganizationName; ///< Stable Lean organization identity.
 extern QString const kBeeftextWikiHomeUrl; ///< The URL of the Beeftext wiki
 extern QString const kBeeftextWikiVariablesUrl; ///< The URL of the page about variables in the Beeftext wiki
 extern QString const kBeeftextReleasesPagesUrl; ///< The URL of the page for the project releases on GitHub

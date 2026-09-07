@@ -142,11 +142,10 @@ void BackupManager::archive(QString const &filePath) const {
     QFileInfo const fileInfo(filePath);
     QString const dstPath = QDir(backupFolderPath)
         .absoluteFilePath(QString("%1_backup.json").arg(QDateTime::currentDateTime().toString("yyyyMMdd_HHmmsszzz")));
-    if ((!fileInfo.exists()) || (!QFile(filePath).rename(dstPath)))
+    if ((!fileInfo.exists()) || (!QFile::copy(filePath, dstPath)))
         log.addWarning(QString("Could not archive file %1").arg(QDir::toNativeSeparators(dstPath)));
     else
         log.addInfo(QString("Backed up combo file to %1").arg(QDir::toNativeSeparators(dstPath)));
     this->cleanup();
 }
-
 

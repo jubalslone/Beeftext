@@ -316,10 +316,11 @@ PreferencesManager &PreferencesManager::instance() {
 /// to QApplication::SetOrganizationName() and QApplication::SetApplicationName()
 //****************************************************************************************************************************************************
 PreferencesManager::PreferencesManager() {
-    // portable edition use a different storage method for preferences
+    // Both modes use explicit INI files. Portable retains its established local
+    // Data path; installed settings are user-restorable in Documents.
     settings_ = isInPortableMode()
         ? std::make_unique<QSettings>(globals::portableModeSettingsFilePath(), QSettings::IniFormat)
-        : std::make_unique<QSettings>(constants::kOrganizationName, constants::kSettingsApplicationName);
+        : std::make_unique<QSettings>(globals::installedSettingsFilePath(), QSettings::IniFormat);
     cache_ = std::make_unique<Cache>(*settings_);
     this->init();
 }
@@ -700,8 +701,8 @@ bool PreferencesManager::warnAboutEmptyComboKeywords() const {
 /// \return true if and only if the operation was successful.
 //****************************************************************************************************************************************************
 bool PreferencesManager::setComboListFolderPath(QString const &path) const {
-    if (isInPortableMode()) {
-        globals::debugLog().addWarning("Trying to the set the 'combo list folder path' preference while running in portable mode");
+    if (isInPortableMode() || constants::kRestrictedBuild) {
+        globals::debugLog().addWarning("Ignoring an attempt to change the fixed combo list folder.");
         return false;
     }
     QString const previousPath = QDir::fromNativeSeparators(comboListFolderPath());
@@ -718,8 +719,9 @@ bool PreferencesManager::setComboListFolderPath(QString const &path) const {
 /// \return The value for the preference
 //****************************************************************************************************************************************************
 QString PreferencesManager::comboListFolderPath() const {
-    return isInPortableMode() ? globals::portableModeDataFolderPath() :
-        this->readSettings<QString>(kKeyComboListFolderPath, defaultComboListFolderPath());
+    if (isInPortableMode() || constants::kRestrictedBuild)
+        return defaultComboListFolderPath();
+    return this->readSettings<QString>(kKeyComboListFolderPath, defaultComboListFolderPath());
 }
 
 
@@ -813,9 +815,9 @@ bool PreferencesManager::useCustomBackupLocation() const {
 /// \param[in] path The path of the custom backup location.
 //****************************************************************************************************************************************************
 void PreferencesManager::setCustomBackupLocation(QString const &path) const {
-    if (isInPortableMode()) {
+    if (isInPortableMode() || constants::kRestrictedBuild) {
         if (QDir::cleanPath(path) != QDir::cleanPath(globals::defaultBackupFolderPath()))
-            globals::debugLog().addWarning("Ignoring a custom backup path while running in portable mode.");
+            globals::debugLog().addWarning("Ignoring a custom backup path in a fixed-storage mode.");
         return;
     }
 
@@ -831,7 +833,7 @@ void PreferencesManager::setCustomBackupLocation(QString const &path) const {
 /// \return The custom backup location.
 //****************************************************************************************************************************************************
 QString PreferencesManager::customBackupLocation() const {
-    if (isInPortableMode())
+    if (isInPortableMode() || constants::kRestrictedBuild)
         return globals::defaultBackupFolderPath();
     return this->readSettings<QString>(kKeyCustomBackupLocation, globals::defaultBackupFolderPath());
 }

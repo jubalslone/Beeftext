@@ -23,7 +23,10 @@ xmilib::DebugLogWindow &debugLogWindow(); ///< Returns a reference to the debug 
 ProcessListManager &sensitiveApplications(); ///< Return the list of sensitive applications.
 ProcessListManager &excludedApplications(); ///< Return the list of excluded applications.
 QString getBuildInfo(); ///< Returns a string containing information about the current build.
-QString appDataDir(); ///< Returns the location of the local storage folder for the application
+QString appDataDir(); ///< Returns the restorable data folder (or portable Data folder).
+QString machineLocalDataDir(); ///< Returns the machine-local data folder (or portable Data folder).
+QString installedSettingsFilePath(); ///< Returns the installed-mode Settings.ini path.
+QString migrationBackupFolderPath(); ///< Returns the migration recovery-copy folder.
 QString translationRootFolderPath(); ///< Returns the location of the root folder for application provided translations.
 QString userTranslationRootFolderPath(); ///< Returns the location of the root folder of the user provided translations.
 QString logFilePath(); ///< Returns the path of the log file

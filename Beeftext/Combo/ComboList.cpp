@@ -474,12 +474,14 @@ bool ComboList::load(QString const &path, bool *outInOlderFileFormat, QString *o
 //****************************************************************************************************************************************************
 bool ComboList::save(QString const &path, bool saveGroups, QString *outErrorMessage) const {
     try {
-        QFile file(path);
+        QSaveFile file(path);
         if (!file.open(QIODevice::WriteOnly))
             throw Exception(QString("Could not open file for writing: '%1'").arg(QDir::toNativeSeparators(path)));
         QByteArray const data = this->toJsonDocument(saveGroups).toJson();
         if (data.size() != file.write(data))
             throw Exception(QString("Error writing to file: %1").arg(QDir::toNativeSeparators(path)));
+        if (!file.commit())
+            throw Exception(QString("Could not atomically replace file: %1").arg(QDir::toNativeSeparators(path)));
         return true;
     }
     catch (Exception const &e) {

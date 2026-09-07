@@ -20,6 +20,7 @@
 #include "Picker/PickerWindow.h"
 #include "Combo/ComboManager.h"
 #include "LastUse/ComboLastUseFile.h"
+#include "Migration/LegacyMigrationManager.h"
 #include <XMiLib/SingleInstanceApp.h>
 #include <XMiLib/SystemUtils.h>
 #include <XMiLib/Exception.h>
@@ -77,9 +78,6 @@ int main(int argc, char *argv[]) {
 
         QGuiApplication::setQuitOnLastWindowClosed(false);
         QGuiApplication::setOrganizationName(constants::kOrganizationName);
-        // Temporarily keep the legacy data identity so existing settings and
-        // AppLocalData remain available. This is independent of the Lean-specific
-        // single-instance identity and will be revisited with installer migration.
         QGuiApplication::setApplicationName(constants::kSettingsApplicationName);
         QGuiApplication::setApplicationDisplayName(constants::kApplicationName);
         QGuiApplication::setApplicationVersion(constants::kProductVersion);
@@ -92,6 +90,7 @@ int main(int argc, char *argv[]) {
         debugLog.addInfo(QString("%1 started.").arg(constants::kApplicationName));
         debugLog.addInfo(QString("Build info: %1").arg(globals::getBuildInfo()));
         applyAutostartParameters();
+        LegacyMigrationManager::runIfNeeded();
         if constexpr (!constants::kRestrictedBuild)
             removeFileMarkedForDeletion();
 
@@ -157,7 +156,12 @@ void ensureDirExists(QString const &path) {
 //
 //****************************************************************************************************************************************************
 void ensureAppDataDirsExist() {
+    if (globals::appDataDir().isEmpty())
+        throw Exception("The Windows Documents known folder could not be resolved.");
+    if (globals::machineLocalDataDir().isEmpty())
+        throw Exception("The machine-local application data folder could not be resolved.");
     ensureDirExists(globals::appDataDir());
+    ensureDirExists(globals::machineLocalDataDir());
     ensureDirExists(globals::userTranslationRootFolderPath());
 }
 

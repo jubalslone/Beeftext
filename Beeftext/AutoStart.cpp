@@ -13,13 +13,11 @@
 #include "BeeftextGlobals.h"
 #include "BeeftextConstants.h"
 #include "Preferences/PreferencesManager.h"
-#include <XMiLib/Exception.h>
 
 
 namespace {
 
 
-QString const kKeyAppExePath = "AppExePath"; ///< The settings key for the application executable path
 QString const kKeyAutoStart = R"(HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run)"; ///< The registry key for autostart
 
 
@@ -78,26 +76,12 @@ void applyAutostartParameters() {
 
 
 //****************************************************************************************************************************************************
-/// The value for this preference is set by the NSIS installer. 
+/// \return The canonical path of the currently running executable.
 //****************************************************************************************************************************************************
 QString installedApplicationPath() {
-    QFileInfo const exeInfo = QFileInfo(QCoreApplication::applicationFilePath());
-    QString const exePath = exeInfo.canonicalFilePath();
-    QVariant const v = PreferencesManager::instance().settings().value(kKeyAppExePath).toString();
-    try {
-        if (!v.canConvert<QString>())
-            throw xmilib::Exception("The path of the installed application is not available in the registry. ");
-        QFileInfo const regExeInfo = QFileInfo(v.toString());
-        if (!regExeInfo.exists())
-            throw xmilib::Exception("The path of the installed application in the registry point to a non existing "
-                                    "file. ");
-        return regExeInfo.canonicalFilePath();
-    }
-    catch (xmilib::Exception const &e) {
-        globals::debugLog().addWarning(QString("%1 The current executable path will be considered to be the installed "
-                                               "application path : %2").arg(e.qwhat()).arg(QDir::toNativeSeparators(exePath)));
-        return exePath;
-    }
+    QFileInfo const exeInfo(QCoreApplication::applicationFilePath());
+    QString const canonicalPath = exeInfo.canonicalFilePath();
+    return canonicalPath.isEmpty() ? exeInfo.absoluteFilePath() : canonicalPath;
 }
 
 
@@ -113,7 +97,10 @@ bool registeredApplicationForAutostart(QString &outPath) {
     QVariant const v = settings.value(key);
     if (!v.canConvert<QString>())
         return false;
-    outPath = QDir::fromNativeSeparators(v.toString());
+    QString value = v.toString().trimmed();
+    if (value.startsWith('"') && value.endsWith('"'))
+        value = value.mid(1, value.size() - 2);
+    outPath = QDir::fromNativeSeparators(value);
     return true;
 }
 
@@ -123,8 +110,7 @@ bool registeredApplicationForAutostart(QString &outPath) {
 //****************************************************************************************************************************************************
 void registerApplicationForAutoStart(QString const &appPath) {
     QSettings settings(kKeyAutoStart, QSettings::NativeFormat);
-    settings.setValue(constants::kApplicationName, QDir::toNativeSeparators(appPath));
-    settings.remove(constants::kSettingsApplicationName);
+    settings.setValue(constants::kApplicationName, QString("\"%1\"").arg(QDir::toNativeSeparators(appPath)));
 }
 
 
@@ -134,5 +120,4 @@ void registerApplicationForAutoStart(QString const &appPath) {
 void unregisterApplicationFromAutoStart() {
     QSettings settings(kKeyAutoStart, QSettings::NativeFormat);
     settings.remove(constants::kApplicationName);
-    settings.remove(constants::kSettingsApplicationName);
 }

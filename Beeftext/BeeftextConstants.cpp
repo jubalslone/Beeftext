@@ -22,11 +22,10 @@ QString const kProductVersion = "1.0.0";
 QString const kUpstreamVersion = "16.0";
 QString const kSingleInstanceIdentifier = "LeanBeeftextSingleInstanceIdentifier";
 QString const kApplicationName = "Lean Beeftext";
-// Keep the legacy data identity temporarily so existing non-portable settings
-// and AppLocalData remain available until the installer architecture defines
-// an explicit migration. This is separate from the Lean-specific process ID.
-QString const kSettingsApplicationName = "Beeftext";
-QString const kOrganizationName = "beeftext.org";
+// These are permanent Lean compatibility identifiers. The migration subsystem
+// reads the legacy beeftext.org/Beeftext identity only as an upstream source.
+QString const kSettingsApplicationName = "Lean Beeftext";
+QString const kOrganizationName = "Jubal Slone";
 QString const kBeeftextWikiHomeUrl = "https://github.com/jubalslone/Beeftext";
 QString const kBeeftextWikiVariablesUrl = "https://github.com/jubalslone/Beeftext#variables";
 QString const kBeeftextReleasesPagesUrl = "https://github.com/jubalslone/Beeftext/releases";
