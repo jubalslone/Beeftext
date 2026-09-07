@@ -75,7 +75,11 @@ int main(int argc, char *argv[]) {
 
         QGuiApplication::setQuitOnLastWindowClosed(false);
         QGuiApplication::setOrganizationName(constants::kOrganizationName);
-        QGuiApplication::setApplicationName(constants::kApplicationName);
+        // Keep the legacy internal identity so installed settings and AppLocalData
+        // continue to resolve to the existing Beeftext locations after rebranding.
+        QGuiApplication::setApplicationName(constants::kSettingsApplicationName);
+        QGuiApplication::setApplicationDisplayName(constants::kApplicationName);
+        QGuiApplication::setApplicationVersion(constants::kProductVersion);
 
         ensureAppDataDirsExist();
         PreferencesManager const &prefs = PreferencesManager::instance();
@@ -211,8 +215,8 @@ void setupPickerWindowShortcut() {
         shortcut = PreferencesManager::defaultComboPickerShortcut();
         prefs.setComboPickerShortcut(shortcut);
         debugLog.addWarning("Thecombo picker shortcut contained the Windows key. It has been reset to the default value.");
-        QMessageBox::information(nullptr, QObject::tr("Error"), QObject::tr("Starting with Beeftext v13.0, the combo picker"
-                                                                            " shortcut cannot contain the Windows key.The shortcut is now %1.").arg(shortcut->toString()));
+        QMessageBox::information(nullptr, QObject::tr("Error"), QObject::tr("The combo picker shortcut cannot contain"
+                                                                            " the Windows key. The shortcut is now %1.").arg(shortcut->toString()));
     }
     if (applyComboPickerPreferences())
         return;

@@ -56,6 +56,7 @@
     <addaction name="actionVisitBeeftextWiki"/>
     <addaction name="actionShowReleaseNotes"/>
     <addaction name="actionReportBug"/>
+    <addaction name="actionOpenLogFile"/>
     <addaction name="separator"/>
     <addaction name="actionShowAboutDialog"/>
    </widget>
@@ -64,10 +65,6 @@
      <string>&amp;Advanced</string>
     </property>
     <addaction name="actionShowLogWindow"/>
-    <addaction name="actionOpenLogFile"/>
-    <addaction name="separator"/>
-    <addaction name="actionGenerateCheatSheet"/>
-    <addaction name="separator"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menu_Advanced"/>
@@ -75,13 +72,13 @@
   </widget>
   <action name="actionExit">
    <property name="text">
-    <string>E&amp;xit Beeftext</string>
+    <string>E&amp;xit Lean Beeftext</string>
    </property>
    <property name="iconText">
     <string notr="true">Exit &lt;insertAppNameHere&gt;</string>
    </property>
    <property name="toolTip">
-    <string>Exit Beeftext</string>
+    <string>Exit Lean Beeftext</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Q</string>
@@ -97,7 +94,7 @@
   </action>
   <action name="actionShowAboutDialog">
    <property name="text">
-    <string>&amp;About Beeftext</string>
+    <string>&amp;About Lean Beeftext</string>
    </property>
    <property name="shortcut">
     <string>F1</string>
@@ -124,10 +121,10 @@
   </action>
   <action name="actionOpenLogFile">
    <property name="text">
-    <string>Open &amp;Log File</string>
+    <string>Open &amp;Diagnostic Log</string>
    </property>
    <property name="toolTip">
-    <string>Open the log file</string>
+    <string>Open the diagnostic log file</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Shift+L</string>
@@ -151,7 +148,7 @@
   </action>
   <action name="actionGenerateCheatSheet">
    <property name="text">
-    <string>&amp;Generate Cheat Sheet</string>
+    <string>&amp;Generate Cheat Sheet…</string>
    </property>
    <property name="toolTip">
     <string>Generate a cheat sheet that can be imported into a spreadsheet application, formatted and printed.</string>

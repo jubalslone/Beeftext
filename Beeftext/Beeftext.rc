@@ -3,8 +3,8 @@ IDI_ICON1 ICON DISCARDABLE "Resources/BeeftextIcon.ico"
 #include <windows.h>
 
 // Do not modify the two following macros, they're auto-updated by the version number update PowerShell script
-#define VERSION_NUMBER 16,0,0,0
-#define VERSION_STRING "16.0\0"
+#define VERSION_NUMBER 1,0,0,0
+#define VERSION_STRING "1.0.0\0"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION VERSION_NUMBER
@@ -23,13 +23,13 @@ BEGIN
     BEGIN
         BLOCK "040904E4"
         BEGIN
-            VALUE "CompanyName", "beeftext.org"
-            VALUE "FileDescription", "Beeftext"
+            VALUE "CompanyName", "Jubal Slone"
+            VALUE "FileDescription", "Lean Beeftext"
             VALUE "FileVersion", VERSION_STRING
-            VALUE "InternalName", "Beeftext"
-            VALUE "LegalCopyright", "Copyright (C) 2018"
-            VALUE "OriginalFilename", "Beeftext.exe"
-            VALUE "ProductName", "Beeftext"
+            VALUE "InternalName", "LeanBeeftext"
+            VALUE "LegalCopyright", "Copyright (C) 2017 Xavier Michelon; modifications Copyright (C) 2026 Jubal Slone"
+            VALUE "OriginalFilename", "LeanBeeftext.exe"
+            VALUE "ProductName", "Lean Beeftext"
             VALUE "ProductVersion", VERSION_STRING
         END
     END

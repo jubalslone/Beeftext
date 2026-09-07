@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(Beeftext VERSION 14.0 LANGUAGES CXX)
+project(Beeftext VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -212,15 +212,15 @@ target_link_libraries(Beeftext XMiLib)
 target_link_libraries(Beeftext Winmm)
 
 if(BUILD_TESTING)
-   add_executable(TLFSafeBuildTests
+   add_executable(LeanSecurityModelTests
       Tests/TLFSafeBuildTests.cpp
       TLFSafeBuild.cpp
       TLFSafeBuild.h
       Combo/ComboPortability.cpp
       Combo/ComboPortability.h
    )
-   target_link_libraries(TLFSafeBuildTests Qt6::Core)
-   target_link_libraries(TLFSafeBuildTests XMiLib)
-   target_compile_definitions(TLFSafeBuildTests PRIVATE BEEFTEXT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-   add_test(NAME TLFSafeBuildTests COMMAND TLFSafeBuildTests)
+   target_link_libraries(LeanSecurityModelTests Qt6::Core)
+   target_link_libraries(LeanSecurityModelTests XMiLib)
+   target_compile_definitions(LeanSecurityModelTests PRIVATE BEEFTEXT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+   add_test(NAME LeanSecurityModelTests COMMAND LeanSecurityModelTests)
 endif()

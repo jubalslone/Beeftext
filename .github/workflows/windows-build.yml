@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build and test Beeftext TLF Safe
+    name: Build and test Lean Beeftext 1.0
     runs-on: windows-2022
     timeout-minutes: 30
 
@@ -100,7 +100,7 @@ jobs:
 
           $buildOutput | Select-Object -Last 40 | ForEach-Object { Write-Host $_.ToString() }
 
-      - name: Run restricted-build tests
+      - name: Run Lean security-model tests
         shell: pwsh
         run: |
           ctest --test-dir build -C Release --output-on-failure 2>&1 | Tee-Object -FilePath test-output.log
@@ -133,7 +133,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Beeftext-TLF-Safe-build-log
+          name: Lean-Beeftext-1.0.0-build-log
           path: |
             build-output.log
             test-output.log
@@ -157,16 +157,16 @@ jobs:
             }
             Write-Host "Executable: $($exe.FullName)"
 
-            $package = Join-Path $PWD 'artifact/Beeftext-TLF-Safe'
+            $package = Join-Path $PWD 'artifact/Lean-Beeftext-Portable'
             New-Item -ItemType Directory -Path $package -Force | Out-Null
-            Copy-Item -Path $exe.FullName -Destination $package
+            Copy-Item -Path $exe.FullName -Destination (Join-Path $package 'LeanBeeftext.exe')
 
             $translationDir = Join-Path $exe.DirectoryName 'translations'
             if (Test-Path $translationDir) {
               Copy-Item -Path $translationDir -Destination $package -Recurse
             }
 
-            & windeployqt --release --compiler-runtime --dir $package (Join-Path $package 'Beeftext.exe')
+            & windeployqt --release --compiler-runtime --dir $package (Join-Path $package 'LeanBeeftext.exe')
             if ($LASTEXITCODE -ne 0) {
               throw "windeployqt failed with exit code $LASTEXITCODE."
             }
@@ -209,13 +209,18 @@ jobs:
             }
 
             Copy-Item -Path LICENSE -Destination $package
-            Copy-Item -Path TLF_SAFE_BUILD.md -Destination $package
+            Copy-Item -Path LICENSE.GPL-3.0.txt -Destination $package
+            Copy-Item -Path LICENSE.Qt-LGPL-3.0.txt -Destination $package
+            Copy-Item -Path README.md -Destination $package
+            Copy-Item -Path SECURITY_MODEL.md -Destination $package
+            Copy-Item -Path THIRD_PARTY_NOTICES.md -Destination $package
             Copy-Item -Path ARTIFACT_SIGNING.md -Destination $package
             New-Item -ItemType File -Path (Join-Path $package 'Portable.bin') -Force | Out-Null
 
             $qtVersion = (& qmake -query QT_VERSION).Trim()
             $sourceCommit = (git rev-parse HEAD).Trim()
             @(
+              "Product: Lean Beeftext 1.0.0"
               "Repository: $env:GITHUB_REPOSITORY"
               "Source commit: $sourceCommit"
               "Workflow run: $env:GITHUB_RUN_ID"
@@ -244,7 +249,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Beeftext-TLF-Safe-package-log
+          name: Lean-Beeftext-1.0.0-package-log
           path: package-output.log
           if-no-files-found: ignore
           retention-days: 7
@@ -253,9 +258,12 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $package = Join-Path $PWD 'artifact/Beeftext-TLF-Safe'
+          $package = Join-Path $PWD 'artifact/Lean-Beeftext-Portable'
           $sourceCommit = (git rev-parse HEAD).Trim()
           $buildInfo = Get-Content -LiteralPath (Join-Path $package 'BUILD_INFO.txt') -Raw
+          if ($buildInfo -notmatch '(?m)^Product: Lean Beeftext 1\.0\.0\r?$') {
+            throw 'BUILD_INFO.txt does not identify Lean Beeftext 1.0.0.'
+          }
           if ($buildInfo -notmatch "(?m)^Source commit: $([regex]::Escape($sourceCommit))\r?$") {
             throw 'BUILD_INFO.txt does not identify the exact checked-out source commit.'
           }
@@ -298,7 +306,7 @@ jobs:
       - name: Upload portable build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: Beeftext-TLF-Safe-windows-x64
-          path: artifact/Beeftext-TLF-Safe
+          name: Lean-Beeftext-1.0.0-portable-windows-x64
+          path: artifact/Lean-Beeftext-Portable
           if-no-files-found: error
           retention-days: 14

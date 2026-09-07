@@ -1,6 +1,6 @@
 /// \file
 ///
-/// \brief Focused tests for the fail-closed TLF restricted-build parser.
+/// \brief Focused tests for the Lean Beeftext restricted execution model.
 
 
 #include "../TLFSafeBuild.h"
@@ -441,6 +441,16 @@ QString readSourceFile(QString const &relativePath) {
 }
 
 
+QString readRepositoryFile(QString const &relativePath) {
+	QFile file(QDir(QStringLiteral(BEEFTEXT_SOURCE_DIR)).absoluteFilePath("../" + relativePath));
+	if (!file.open(QIODevice::ReadOnly)) {
+		expect(false, QString("repository file can be read: %1").arg(relativePath));
+		return QString();
+	}
+	return QString::fromUtf8(file.readAll());
+}
+
+
 void testRestrictedPortabilityUiSurface() {
 	QString const mainWindowUi = readSourceFile("MainWindow.ui");
 	expect(!mainWindowUi.contains("actionBackup") && !mainWindowUi.contains("actionRestore")
@@ -493,6 +503,92 @@ void testRestrictedPortabilityUiSurface() {
 }
 
 
+void testProductFinishingSurface() {
+	QString const constantsHeader = readSourceFile("BeeftextConstants.h");
+	QString const constantsSource = readSourceFile("BeeftextConstants.cpp");
+	expect(constantsSource.contains("kApplicationName = \"Lean Beeftext\"")
+		&& constantsSource.contains("kProductVersion = \"1.0.0\"")
+		&& constantsSource.contains("kUpstreamVersion = \"16.0\""),
+		"public product identity is Lean Beeftext 1.0.0 based on Beeftext 16.0");
+	expect(constantsSource.contains("kVersionNumber(16, 0)")
+		&& !readSourceFile("Dialogs/AboutDialog.cpp").contains("kVersionNumber")
+		&& readRepositoryFile("CMakeLists.txt").contains("VERSION 1.0.0")
+		&& readSourceFile("CMakeLists.txt").contains("VERSION 1.0.0")
+		&& readSourceFile("Beeftext.rc").contains("VERSION_STRING \"1.0.0\\0\""),
+		"public metadata is 1.0.0 while the disabled updater keeps its two-part upstream compatibility value");
+	expect(constantsSource.contains("kSettingsApplicationName = \"Beeftext\"")
+		&& constantsHeader.contains("kSettingsApplicationName"),
+		"the legacy settings namespace is explicit and preserved");
+	expect(constantsSource.contains("https://github.com/jubalslone/Beeftext#variables"),
+		"About Variables uses the README Variables anchor");
+
+	QString const preferencesSource = readSourceFile("Preferences/PreferencesManager.cpp");
+	QString const preferencesHeader = readSourceFile("Preferences/PreferencesManager.h");
+	expect(preferencesSource.contains("kDefaultUseCustomTheme = false")
+		&& preferencesHeader.contains("bool useCustomTheme { false }"),
+		"fresh settings follow the Windows theme");
+	expect(preferencesSource.contains("readSettings<bool>(settings_, kKeyUseCustomTheme, kDefaultUseCustomTheme)")
+		&& preferencesSource.contains("settings_->setValue(kKeyUseCustomTheme, value)"),
+		"stored explicit Light or Dark override state still wins and persists");
+	expect(readSourceFile("Preferences/Panes/PrefPaneAppearance.ui").contains("Override Windows theme")
+		&& readSourceFile("Preferences/Panes/PrefPaneAppearance.ui").contains("follows the Windows light or dark theme"),
+		"Appearance explains system following and explicit override behavior");
+
+	QString const mainUi = readSourceFile("MainWindow.ui");
+	QString const mainSource = readSourceFile("MainWindow.cpp");
+	QString const entryPointSource = readSourceFile("main.cpp");
+	expect(entryPointSource.contains("setApplicationName(constants::kSettingsApplicationName)")
+		&& entryPointSource.contains("setApplicationDisplayName(constants::kApplicationName)")
+		&& entryPointSource.contains("setApplicationVersion(constants::kProductVersion)"),
+		"the public display name and version change without moving existing AppLocalData");
+	expect(mainSource.contains("removeAction(ui_.menu_Advanced->menuAction())")
+		&& mainSource.contains("insertMenu(ui_.menu_Help->menuAction(), combosMenu_)")
+		&& mainSource.contains("insertMenu(ui_.menu_Help->menuAction(), groupsMenu_)"),
+		"Release menu construction yields File, Combos, Groups, Help without Advanced");
+	expect(mainSource.contains("combosMenu_->addAction(ui_.actionGenerateCheatSheet)"),
+		"Generate Cheat Sheet is reachable from the Combos menu");
+	expect(mainUi.contains("Open &amp;Diagnostic Log")
+		&& mainUi.contains("&amp;About Lean Beeftext"),
+		"Help exposes Open Diagnostic Log and About Lean Beeftext");
+	expect(mainUi.indexOf("actionVisitBeeftextWiki") < mainUi.indexOf("actionShowReleaseNotes")
+		&& mainUi.indexOf("actionShowReleaseNotes") < mainUi.indexOf("actionReportBug")
+		&& mainUi.indexOf("actionReportBug") < mainUi.indexOf("actionOpenLogFile"),
+		"Help actions retain the requested order");
+
+	QString const aboutUi = readSourceFile("Dialogs/AboutDialog.ui");
+	QString const aboutSource = readSourceFile("Dialogs/AboutDialog.cpp");
+	expect(aboutUi.contains("About Lean Beeftext")
+		&& aboutUi.contains("Maintained by Jubal Slone")
+		&& aboutUi.contains("unofficial fork of Beeftext 16.0 by Xavier Michelon")
+		&& aboutUi.contains("upstream Beeftext translation contributors"),
+		"About dialog has the correct maintainer, upstream author, and translator attribution");
+	expect(aboutSource.contains("kProductVersion")
+		&& aboutSource.contains("Project Repository")
+		&& aboutSource.contains("Third-Party Notices"),
+		"About dialog presents the public version and concise project/license links");
+
+	QString const readme = readRepositoryFile("README.md");
+	QString const securityModel = readRepositoryFile("SECURITY_MODEL.md");
+	QString const notices = readRepositoryFile("THIRD_PARTY_NOTICES.md");
+	expect(readme.contains("## Variables\n")
+		&& readme.contains("Lean Beeftext 1.0.0")
+		&& readme.contains("Des Moines, IA 50309"),
+		"README contains the Variables anchor and Lean product guidance");
+	expect(QFileInfo(QDir(QStringLiteral(BEEFTEXT_SOURCE_DIR)).absoluteFilePath("../SECURITY_MODEL.md")).isFile()
+		&& !QFileInfo(QDir(QStringLiteral(BEEFTEXT_SOURCE_DIR)).absoluteFilePath("../TLF_SAFE_BUILD.md")).exists(),
+		"SECURITY_MODEL.md replaces the old public security document filename");
+	expect(!readme.contains("TLF", Qt::CaseInsensitive)
+		&& !securityModel.contains("TLF", Qt::CaseInsensitive)
+		&& !notices.contains("TLF", Qt::CaseInsensitive)
+		&& !readme.contains("Trent Law Firm", Qt::CaseInsensitive)
+		&& !securityModel.contains("Trent Law Firm", Qt::CaseInsensitive),
+		"public documentation contains no old organization-specific terminology");
+	expect(readSourceFile("Combo/ComboPortability.cpp").contains("Legacy Beeftext JSON files (*.json)")
+		&& readSourceFile("Combo/ComboPortability.cpp").contains("Legacy Beeftext CSV files (*.csv)"),
+		"legacy Beeftext import format labels remain correctly branded");
+}
+
+
 } // anonymous namespace
 
 
@@ -507,7 +603,8 @@ int main(int argc, char *argv[]) {
 	testComboExportBundle();
 	testComboPortabilityFiles();
 	testRestrictedPortabilityUiSurface();
+	testProductFinishingSurface();
     if (failureCount == 0)
-        qInfo() << "All TLF restricted-build tests passed.";
+        qInfo() << "All Lean Beeftext security-model tests passed.";
     return failureCount == 0 ? 0 : 1;
 }

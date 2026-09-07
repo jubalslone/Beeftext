@@ -177,7 +177,7 @@ private: // data members
         QString emojiRightDelimiter; ///< Cached value for the 'emoji right delimiter' preference.
         bool showEmojisInPickerWindow { false }; ///< Cached value for the 'Show emojis in picker window' preference.
         bool beeftextEnabled { true }; ///< Cached value for the 'Beeftext enabled' preference.
-        bool useCustomTheme { true }; ///< Cached value for the 'Use custom theme' preference.
+        bool useCustomTheme { false }; ///< Cached value for the explicit theme override preference.
         ETheme theme { ETheme::Light }; ///< Cached value for the 'Theme' preference.
         bool useShiftInsertForPasting { false }; ///< Cached value for use 'Use Shift+Insert for pasting' preference.
 

@@ -110,7 +110,7 @@ bool constexpr kDefaultPlaySoundOnCombo = true; ///< The default value for the '
 bool constexpr kDefaultUseAutomaticSubstitution = true; ///< The default value for the 'Use automatic substitution' preference
 bool constexpr kDefaultUseCustomBackupLocation = false; ///< The default value for the 'Use custom backup location' preference.
 bool constexpr kDefaultUseCustomSound = false; ///< The default value for the 'Use custom sound' preference.
-bool constexpr kDefaultUseCustomTheme = true; ///< The default value for the 'Use custom theme' preference
+bool constexpr kDefaultUseCustomTheme = false; ///< By default, follow the Windows theme.
 bool constexpr kDefaultWarnAboutShortComboKeyword = true; ///< The default value for the 'Warn about short combo keyword' preference
 bool constexpr kDefaultWarnAboutEmptyComboKeyword = true; ///< The default value for the 'Warn about empty combo keyword' preference
 bool constexpr kDefaultWriteDebugLogFile = true; ///< The default value for the 'Write debug log file' preference
@@ -336,7 +336,7 @@ PreferencesManager::PreferencesManager() {
     // portable edition use a different storage method for preferences
     settings_ = isInPortableMode()
         ? std::make_unique<QSettings>(globals::portableModeSettingsFilePath(), QSettings::IniFormat)
-        : std::make_unique<QSettings>(constants::kOrganizationName, constants::kApplicationName);
+        : std::make_unique<QSettings>(constants::kOrganizationName, constants::kSettingsApplicationName);
     cache_ = std::make_unique<Cache>(*settings_);
     this->init();
 }

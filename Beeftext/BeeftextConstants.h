@@ -20,13 +20,16 @@ Q_DECLARE_SMART_POINTER_METATYPE(std::shared_ptr)
 namespace constants {
 
 
-extern xmilib::VersionNumber const kVersionNumber; ///< The version number of the application.
+extern xmilib::VersionNumber const kVersionNumber; ///< Two-part compatibility version for the disabled upstream updater.
+extern QString const kProductVersion; ///< The full public product version.
+extern QString const kUpstreamVersion; ///< The upstream Beeftext version on which this product is based.
 
 QChar constexpr kEmojiDelimiter = '|'; ///< The delimiter for emojis
 QColor constexpr blueBeeftextColor(0x25, 0x8c, 0xc0); ///< Return the blue color used for the GUI.
 Qt::DateFormat constexpr kJsonExportDateFormat = Qt::ISODateWithMs; ///< The date/time export format used for JSon docs
 
 extern QString const kApplicationName; ///< The application name
+extern QString const kSettingsApplicationName; ///< The legacy application name used to preserve existing settings.
 extern QString const kOrganizationName; ///< The organization name
 extern QString const kBeeftextWikiHomeUrl; ///< The URL of the Beeftext wiki
 extern QString const kBeeftextWikiVariablesUrl; ///< The URL of the page about variables in the Beeftext wiki

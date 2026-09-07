@@ -41,29 +41,29 @@ void applyAutostartParameters() {
         log.addInfo("Auto-start is enabled.");
         QString const &installedAppPath = QFileInfo(installedApplicationPath()).absoluteFilePath();
         if (installedAppPath.isEmpty()) {
-            log.addError("Beeftext is not properly installed (installedAppPath is empty). The application cannot be "
+            log.addError("Lean Beeftext is not properly installed (installedAppPath is empty). The application cannot be "
                          "registered for auto-start.");
             return;
         }
         if (!QFileInfo(installedAppPath).exists()) {
-            log.addError(QString("Beeftext is not properly installed (installedAppPath points to a non-existing "
+            log.addError(QString("Lean Beeftext is not properly installed (installedAppPath points to a non-existing "
                                  "file '%1'). The application cannot be registered for auto-start.").arg(installedAppPath));
             return;
         }
 
         if (hasRegisteredApp) {
             if (installedAppPath == registeredAppPath) {
-                log.addInfo(QString("Beeftext is already properly registered in system for auto-start. Path is '%1'.")
+                log.addInfo(QString("Lean Beeftext is already properly registered in system for auto-start. Path is '%1'.")
                     .arg(QDir::toNativeSeparators(registeredAppPath)));
                 return;
             }
             registerApplicationForAutoStart(installedAppPath);
-            log.addWarning(QString("The path of the registered instance of Beeftext '%1' is invalid and has "
+            log.addWarning(QString("The path of the registered instance of Lean Beeftext '%1' is invalid and has "
                                    "been modified to '%2'.").arg(registeredAppPath).arg(installedAppPath));
             return;
         }
         registerApplicationForAutoStart(installedAppPath);
-        log.addInfo(QString("Beefext has been registered for auto-start. Application path is '%1'.")
+        log.addInfo(QString("Lean Beeftext has been registered for auto-start. Application path is '%1'.")
             .arg(QDir::toNativeSeparators(installedAppPath)));
         return;
     }
@@ -106,9 +106,11 @@ QString installedApplicationPath() {
 //****************************************************************************************************************************************************
 bool registeredApplicationForAutostart(QString &outPath) {
     QSettings const settings(kKeyAutoStart, QSettings::NativeFormat);
-    if (!settings.contains(constants::kApplicationName))
+    QString const key = settings.contains(constants::kApplicationName) ? constants::kApplicationName
+        : (settings.contains(constants::kSettingsApplicationName) ? constants::kSettingsApplicationName : QString());
+    if (key.isEmpty())
         return false;
-    QVariant const v = settings.value(constants::kApplicationName);
+    QVariant const v = settings.value(key);
     if (!v.canConvert<QString>())
         return false;
     outPath = QDir::fromNativeSeparators(v.toString());
@@ -120,7 +122,9 @@ bool registeredApplicationForAutostart(QString &outPath) {
 /// \param[in] appPath The path of the application.
 //****************************************************************************************************************************************************
 void registerApplicationForAutoStart(QString const &appPath) {
-    QSettings(kKeyAutoStart, QSettings::NativeFormat).setValue(constants::kApplicationName, QDir::toNativeSeparators(appPath));
+    QSettings settings(kKeyAutoStart, QSettings::NativeFormat);
+    settings.setValue(constants::kApplicationName, QDir::toNativeSeparators(appPath));
+    settings.remove(constants::kSettingsApplicationName);
 }
 
 
@@ -128,7 +132,7 @@ void registerApplicationForAutoStart(QString const &appPath) {
 //
 //****************************************************************************************************************************************************
 void unregisterApplicationFromAutoStart() {
-    QSettings(kKeyAutoStart, QSettings::NativeFormat).remove(constants::kApplicationName);
+    QSettings settings(kKeyAutoStart, QSettings::NativeFormat);
+    settings.remove(constants::kApplicationName);
+    settings.remove(constants::kSettingsApplicationName);
 }
-
-

@@ -29,9 +29,14 @@ MainWindow::MainWindow() {
     ui_.setupUi(this);
     groupsMenu_ = ui_.frameCombos->groupListWidget()->menu(this);
     combosMenu_ = ui_.frameCombos->comboTableWidget()->menu(this);
+    combosMenu_->addSeparator();
+    combosMenu_->addAction(ui_.actionGenerateCheatSheet);
     this->setupSystemTrayIcon();
-    this->menuBar()->insertMenu(ui_.menu_Advanced->menuAction(), groupsMenu_);
-    this->menuBar()->insertMenu(ui_.menu_Advanced->menuAction(), combosMenu_);
+#ifdef NDEBUG
+    this->menuBar()->removeAction(ui_.menu_Advanced->menuAction());
+#endif
+    this->menuBar()->insertMenu(ui_.menu_Help->menuAction(), combosMenu_);
+    this->menuBar()->insertMenu(ui_.menu_Help->menuAction(), groupsMenu_);
     PreferencesManager const &prefs = PreferencesManager::instance();
     this->restoreWindowGeometry();
     ui_.actionOpenLogFile->setEnabled(prefs.writeDebugLogFile());
@@ -41,9 +46,6 @@ MainWindow::MainWindow() {
     connect(ui_.actionReportBug, &QAction::triggered, []() { QDesktopServices::openUrl(QUrl(constants::kBeeftextIssueTrackerUrl)); });
     connect(&InputManager::instance(), &InputManager::comboMenuShortcutTriggered, this, &MainWindow::onShowComboMenu);
     connect(&prefs, &PreferencesManager::writeDebugLogFileChanged, this, &MainWindow::onWriteDebugLogFileChanged);
-#ifdef NDEBUG
-    ui_.menu_Advanced->removeAction(ui_.actionShowLogWindow);
-#endif
 }
 
 
@@ -128,7 +130,7 @@ void MainWindow::setupSystemTrayIcon() {
     QGuiApplication::setWindowIcon(icon);
 
     QMenu *menu = new QMenu(this);
-    QAction *action = new QAction(tr("Open Beeftext"), this);
+    QAction *action = new QAction(tr("Open Lean Beeftext"), this);
     connect(action, &QAction::triggered, [this]() { this->showWindow(); });
     menu->addAction(action);
 
@@ -142,7 +144,7 @@ void MainWindow::setupSystemTrayIcon() {
 
     menu->addSeparator();
 
-    ui_.actionEnableDisableBeeftext->setText(enabled ? tr("&Pause Beeftext") : tr("&Resume Beeftext"));
+    ui_.actionEnableDisableBeeftext->setText(enabled ? tr("&Pause Lean Beeftext") : tr("&Resume Lean Beeftext"));
     menu->addAction(ui_.actionEnableDisableBeeftext);
 
     menu->addSeparator();
@@ -155,7 +157,7 @@ void MainWindow::setupSystemTrayIcon() {
     QAction *actionShowLogWindow = new QAction(tr("Show Log Window"), this);
     connect(actionShowLogWindow, &QAction::triggered, this, &MainWindow::onActionShowLogWindow);
     menu->addAction(actionShowLogWindow);
-    QAction *actionShowLog = new QAction(tr("Open Log File"), this);
+    QAction *actionShowLog = new QAction(tr("Open Diagnostic Log"), this);
     connect(actionShowLog, &QAction::triggered, []() { openLogFile(); });
     menu->addAction(actionShowLog);
     QAction *actionShowStyleSheet = new QAction(tr("Show Stylesheet Editor"), this);
@@ -248,7 +250,7 @@ void MainWindow::onActionEnableDisableBeeftext() {
 //****************************************************************************************************************************************************
 void MainWindow::onShowComboMenu() {
     QMenu *menu = new QMenu(this);
-    QAction *action = new QAction(tr("Open Beeftext"), this);
+    QAction *action = new QAction(tr("Open Lean Beeftext"), this);
     connect(action, &QAction::triggered, [this]() { this->showWindow(); });
     menu->addAction(action);
     menu->popup(QCursor::pos());
@@ -300,7 +302,7 @@ void MainWindow::onActionGenerateCheatSheet() {
     QString folder = PreferencesManager::instance().lastComboImportExportPath();
     if (!QFileInfo(folder).isDir())
         folder = QStandardPaths::writableLocation(QStandardPaths::DesktopLocation);
-    QString const path = QFileDialog::getSaveFileName(this, tr("Generate Cheat Sheet"), QDir(folder).absoluteFilePath("BeeftextCheatSheet.csv"), globals::csvFileDialogFilter());
+    QString const path = QFileDialog::getSaveFileName(this, tr("Generate Cheat Sheet"), QDir(folder).absoluteFilePath("Lean-Beeftext-Cheat-Sheet.csv"), globals::csvFileDialogFilter());
     if (path.isEmpty())
         return;
     QString errMsg;

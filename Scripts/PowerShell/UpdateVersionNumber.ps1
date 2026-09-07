@@ -9,5 +9,5 @@
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "Beeftext.ps1")
 
-updateVersionNumberInInstaller
+# Installer versioning is intentionally deferred until the separate Lean Beeftext installer project.
 updateVersionNumberInRcFile

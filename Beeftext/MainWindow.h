@@ -63,7 +63,7 @@ private slots:
     void onActionExit(); ///< Slot for the 'Exit' action
     static void onActionShowAboutDialog(); ///< Slot for the 'Show About dialog' action
     void onActionShowPreferencesDialog(); ///< Slot for the 'Show Preferences dialog' action
-    static void onActionOpenLogFile(); ///< Slot for the 'Open Log File' action
+    static void onActionOpenLogFile(); ///< Slot for the 'Open Diagnostic Log' action
     static void onActionShowLogWindow(); ///< Slot for the 'Show Log Window action.
     void onActionGenerateCheatSheet(); ///< Slot for the 'Generate Cheat Sheet' action.
     void onWriteDebugLogFileChanged(bool value) const; ///< Slot for the change of the 'Write debug log file' preference.

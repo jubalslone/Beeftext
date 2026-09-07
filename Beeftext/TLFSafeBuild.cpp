@@ -1,6 +1,6 @@
 /// \file
 ///
-/// \brief Fail-closed parsing helpers for the TLF restricted build.
+/// \brief Fail-closed parsing helpers for the restricted Lean Beeftext build.
 ///
 /// Licensed under the MIT License. See LICENSE file in the project root for full license information.
 

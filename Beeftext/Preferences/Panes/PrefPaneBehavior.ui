@@ -54,7 +54,7 @@
    <item>
    <widget class="QCheckBox" name="checkAutoStart">
      <property name="text">
-      <string>&amp;Automatically start Beeftext at login</string>
+      <string>&amp;Automatically start Lean Beeftext at login</string>
      </property>
     </widget>
    </item>
@@ -168,7 +168,7 @@
      <item>
       <widget class="QCheckBox" name="checkAppEnableDisable">
        <property name="text">
-        <string>Use shortcut to enable/disable Beeftext</string>
+        <string>Use shortcut to enable/disable Lean Beeftext</string>
        </property>
       </widget>
      </item>

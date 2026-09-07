@@ -14,11 +14,17 @@
 namespace constants {
 
 
+// XMiLib's two-part version type is retained at the upstream base version for
+// compatibility with the disabled upstream update-comparison machinery. All
+// public product surfaces use kProductVersion instead.
 xmilib::VersionNumber const kVersionNumber(16, 0);
-QString const kApplicationName = "Beeftext";
+QString const kProductVersion = "1.0.0";
+QString const kUpstreamVersion = "16.0";
+QString const kApplicationName = "Lean Beeftext";
+QString const kSettingsApplicationName = "Beeftext";
 QString const kOrganizationName = "beeftext.org";
 QString const kBeeftextWikiHomeUrl = "https://github.com/jubalslone/Beeftext";
-QString const kBeeftextWikiVariablesUrl = "https://github.com/jubalslone/Beeftext";
+QString const kBeeftextWikiVariablesUrl = "https://github.com/jubalslone/Beeftext#variables";
 QString const kBeeftextReleasesPagesUrl = "https://github.com/jubalslone/Beeftext/releases";
 QString const kBeeftextIssueTrackerUrl = "https://github.com/jubalslone/Beeftext/issues";
 QString const kKeyVariableRegExpStr(R"(#{key:(\w+)(?>:(\d+))?})");

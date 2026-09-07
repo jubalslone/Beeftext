@@ -118,7 +118,7 @@
      <item>
       <widget class="QCheckBox" name="checkUseCustomTheme">
        <property name="text">
-        <string>Use custom theme</string>
+        <string>Override Windows theme</string>
        </property>
       </widget>
      </item>
@@ -143,6 +143,16 @@
       </spacer>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="labelThemeHelp">
+     <property name="text">
+      <string>When this is off, Lean Beeftext follows the Windows light or dark theme.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>

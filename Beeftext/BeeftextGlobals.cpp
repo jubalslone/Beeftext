@@ -79,7 +79,7 @@ ProcessListManager &sensitiveApplications() {
         return *manager;
 
     manager = std::make_unique<ProcessListManager>(QObject::tr(R"(<html><head/><body><p>Use this dialog
-      to list sensitive applications that do not work correctly with Beeftext because they do not support standard 
+      to list sensitive applications that do not work correctly with Lean Beeftext because they do not support standard
       copy-paste using Ctrl+V.</p><p>List applications using their process name (e.g, notepad.exe). Wildcards 
       are accepted.</p></body></html>)"));
     manager->setFilePath(sensitiveApplicationsFilePath());
@@ -99,7 +99,7 @@ ProcessListManager &excludedApplications() {
         return *manager;
 
     manager = std::make_unique<ProcessListManager>(QObject::tr(R"(<html><head/><body><p>Use this dialog
-      to list excluded applications. Beeftext will not perform substitution in these applications.</p>
+      to list excluded applications. Lean Beeftext will not perform substitution in these applications.</p>
       <p>List applications using their process name (e.g, notepad.exe). Wildcards 
       are accepted.</p></body></html>)"));
     manager->setFilePath(excludedApplicationsFilePath());

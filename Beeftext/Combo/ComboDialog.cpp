@@ -26,7 +26,7 @@ namespace {
 //****************************************************************************************************************************************************
 QString variablesLabel() {
     return QObject::tr(R"(
-      <html><head/><body><p><a href="https://github.com/jubalslone/Beeftext">
+      <html><head/><body><p><a href="https://github.com/jubalslone/Beeftext#variables">
       About variables</a></p></body></html>)");
 }
 
@@ -144,7 +144,7 @@ bool ComboDialog::checkAndReportInvalidCombo() {
     ComboList const &comboList = ComboManager::instance().comboListRef();
     if ((!newKeyword.isEmpty()) && (comboList.end() != std::find_if(comboList.begin(), comboList.end(), [&](SpCombo const &existing) -> bool { return (existing != combo_) && (existing->keyword() == newKeyword); })))
         return questionDialog(this, tr("Duplicate keyword"), tr("This keyword is already in use. \n\n"
-                                                                "You can have multiple combos with the same keyword, Beeftext will pick one of the matching combos "
+                                                                "You can have multiple combos with the same keyword, Lean Beeftext will pick one of the matching combos "
                                                                 "randomly."), tr("&Continue"), tr("C&ancel"));
 
     // we check for conflicts that would make some combo 'unreachable'
