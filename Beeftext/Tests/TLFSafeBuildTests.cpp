@@ -548,6 +548,8 @@ void testProductFinishingSurface() {
 	QString const mainUi = readSourceFile("MainWindow.ui");
 	QString const mainSource = readSourceFile("MainWindow.cpp");
 	QString const entryPointSource = readSourceFile("main.cpp");
+	QString const resourceSource = readSourceFile("Beeftext.qrc");
+	QString const windowsResourceSource = readSourceFile("Beeftext.rc");
 	expect(entryPointSource.contains("setApplicationName(constants::kSettingsApplicationName)")
 		&& entryPointSource.contains("setApplicationDisplayName(constants::kApplicationName)")
 		&& entryPointSource.contains("setApplicationVersion(constants::kProductVersion)"),
@@ -561,6 +563,23 @@ void testProductFinishingSurface() {
 		"Release menu construction yields File, Combos, Groups, Help without Advanced");
 	expect(mainSource.contains("combosMenu_->addAction(ui_.actionGenerateCheatSheet)"),
 		"Generate Cheat Sheet is reachable from the Combos menu");
+	expect(windowsResourceSource.contains("Resources/Icons/LeanBeeftextApp.ico")
+		&& resourceSource.contains("Resources/Icons/LeanBeeftextApp.ico")
+		&& resourceSource.contains("Resources/Icons/LeanBeeftextAppPaused.ico")
+		&& mainSource.contains("Resources/Icons/LeanBeeftextTray.ico")
+		&& mainSource.contains("Resources/Icons/LeanBeeftextTrayPaused.ico")
+		&& mainSource.contains("Resources/Icons/LeanBeeftextAppPaused.ico")
+		&& mainSource.contains("setWindowIcon(windowIcon)"),
+		"executable, window, enabled tray, and paused tray surfaces use their dedicated Lean icons");
+	expect(readSourceFile("Dialogs/AboutDialog.ui").contains("Icons/App/LeanBeeftextApp-128.png")
+		&& readSourceFile("Picker/PickerWindow.ui").contains("Icons/App/LeanBeeftextApp-32.png")
+		&& !resourceSource.contains("BeeftextLogo128.png")
+		&& !resourceSource.contains("BeeftextIconGrayscale.ico"),
+		"About and picker use full Lean artwork while legacy compiled icon resources are absent");
+	expect(readRepositoryFile("Scripts/GenerateLeanIconAssets.sh").contains("LeanBeeftextTray16Source.png")
+		&& readSourceFile("Resources/Icons/ASSET_MANIFEST.md").contains("Dedicated optical bull-only artwork")
+		&& readSourceFile("Resources/Icons/SHA256SUMS.txt").contains("LeanBeeftextTray-16.png"),
+		"the deterministic asset bundle records and verifies the dedicated 16-pixel optical source");
 	expect(mainUi.contains("Open &amp;Diagnostic Log")
 		&& mainUi.contains("&amp;About Lean Beeftext"),
 		"Help exposes Open Diagnostic Log and About Lean Beeftext");

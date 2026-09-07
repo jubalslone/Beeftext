@@ -110,7 +110,7 @@
            <string/>
           </property>
           <property name="pixmap">
-           <pixmap resource="../Beeftext.qrc">:/MainWindow/Resources/BeeftextLogo128.png</pixmap>
+           <pixmap resource="../Beeftext.qrc">:/MainWindow/Resources/Icons/App/LeanBeeftextApp-32.png</pixmap>
           </property>
           <property name="scaledContents">
            <bool>true</bool>

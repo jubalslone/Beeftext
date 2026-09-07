@@ -536,7 +536,7 @@
     <None Include="Translations\beeftext_fr_FR.ts" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="Resources\BeeftextIcon.ico" />
+    <Image Include="Resources\Icons\LeanBeeftextApp.ico" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Submodules\XMiLib\XMiLib\XMiLib.vcxproj">

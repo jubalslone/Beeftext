@@ -122,12 +122,14 @@ void MainWindow::setupSystemTrayIcon() {
                                                + (enabled ? QString() : pausedIndicator));
     this->setWindowTitle(QString()); // force refresh of the title bar
 
-    QIcon const icon(enabled ? ":/MainWindow/Resources/BeeftextIcon.ico"
-                             : ":/MainWindow/Resources/BeeftextIconGrayscale.ico");
-    systemTrayIcon_.setIcon(icon);
+    QIcon const trayIcon(enabled ? ":/MainWindow/Resources/Icons/LeanBeeftextTray.ico"
+                                 : ":/MainWindow/Resources/Icons/LeanBeeftextTrayPaused.ico");
+    QIcon const windowIcon(enabled ? ":/MainWindow/Resources/Icons/LeanBeeftextApp.ico"
+                                   : ":/MainWindow/Resources/Icons/LeanBeeftextAppPaused.ico");
+    systemTrayIcon_.setIcon(trayIcon);
     systemTrayIcon_.setToolTip(constants::kApplicationName + (enabled ? "" : pausedIndicator));
     systemTrayIcon_.show();
-    QGuiApplication::setWindowIcon(icon);
+    QGuiApplication::setWindowIcon(windowIcon);
 
     QMenu *menu = new QMenu(this);
     QAction *action = new QAction(tr("Open Lean Beeftext"), this);

@@ -411,7 +411,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="Resources\BeeftextIcon.ico">
+    <Image Include="Resources\Icons\LeanBeeftextApp.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

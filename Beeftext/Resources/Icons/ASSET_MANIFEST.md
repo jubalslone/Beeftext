@@ -26,7 +26,8 @@ The script was validated with ImageMagick 7.1.1-43 Q16. `SHA256SUMS.txt` records
 | Application surface | Asset |
 | --- | --- |
 | Windows executable and Windows shell | `LeanBeeftextApp.ico` |
-| Qt application/window icon | `LeanBeeftextApp.ico` |
+| Enabled Qt application/window icon | `LeanBeeftextApp.ico` |
+| Paused Qt application/window icon | `LeanBeeftextAppPaused.ico` |
 | Enabled system tray icon | `LeanBeeftextTray.ico` |
 | Paused system tray icon | `LeanBeeftextTrayPaused.ico` |
 | About dialog | `App/LeanBeeftextApp-128.png` |
