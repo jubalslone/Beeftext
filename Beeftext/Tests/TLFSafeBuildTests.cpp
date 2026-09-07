@@ -747,6 +747,51 @@ void testInstalledStorageAndMigrationSafety() {
 }
 
 
+void testInstallerArchitecture() {
+    QString const installer = readRepositoryFile("Installer/LeanBeeftext.iss");
+    QString const staging = readRepositoryFile("Installer/StagePayload.ps1");
+    QString const workflow = readRepositoryFile(".github/workflows/windows-build.yml");
+    QString const installerDoc = readRepositoryFile("INSTALLER.md");
+    expect(installer.contains("AppId={{499E5EE9-ECC6-455E-B78A-EDF581715A80}")
+        && !installer.contains("AppId={{499E5EE9-ECC6-455E-B78A-EDF581715A80}-1.0")
+        && installerDoc.contains("{499E5EE9-ECC6-455E-B78A-EDF581715A80}"),
+        "the Inno AppId is explicit, stable, documented, and version-free");
+    expect(installer.contains("DefaultDirName={autopf}\\Lean Beeftext")
+        && installer.contains("PrivilegesRequired=admin")
+        && installer.contains("Flags: unchecked")
+        && installer.contains("skipifsilent runasoriginaluser")
+        && !installer.contains("LicenseFile=")
+        && !installer.contains("Portable.bin"),
+        "the single installer uses the boring elevated Program Files flow without portable state or a license page");
+    expect(installer.contains("ForceCloseApplications=no")
+        && installer.contains("RestartApplications=no")
+        && installer.contains("CompareVersions")
+        && installer.contains("newer version of Lean Beeftext")
+        && installerDoc.contains("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"),
+        "installer upgrades permit same-version reinstall, refuse downgrade, avoid force-closing, and document unattended use");
+    expect(staging.contains("ValidateSet('Installed', 'Portable')")
+        && staging.contains("Installed payload must not contain $beacon")
+        && staging.contains("SHA256SUMS.txt")
+        && staging.contains("BUILD_INFO.txt"),
+        "one staging script builds isolated installed and portable payloads with provenance manifests");
+    expect(!QFileInfo(QDir(QStringLiteral(BEEFTEXT_SOURCE_DIR)).absoluteFilePath("../Installer/installer.nsi")).exists()
+        && !QFileInfo(QDir(QStringLiteral(BEEFTEXT_SOURCE_DIR)).absoluteFilePath("../Installer/BuildAll.ps1")).exists(),
+        "obsolete NSIS entry points are retired");
+    expect(workflow.contains("innosetup-7.1.0-x64.exe")
+        && workflow.contains("0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f")
+        && workflow.contains("-Mode Installed")
+        && workflow.contains("-Mode Portable")
+        && workflow.contains("Same-version reinstall")
+        && workflow.contains("Documents user-data fixture was deleted by uninstall")
+        && workflow.contains("Lean-Beeftext-Setup-1.0.0.exe"),
+        "Windows CI pins and verifies Inno, stages both modes, and smoke-tests reinstall and preserving user data");
+    expect(installerDoc.contains("does not delete `<Documents>\\Lean Beeftext`")
+        && readRepositoryFile("README.md").contains("Program Files\\Lean Beeftext")
+        && readRepositoryFile("README.md").contains("OneDrive Known Folder Move"),
+        "installed locations, OneDrive redirection, and uninstall preservation are documented");
+}
+
+
 } // anonymous namespace
 
 
@@ -763,6 +808,7 @@ int main(int argc, char *argv[]) {
 	testRestrictedPortabilityUiSurface();
 	testProductFinishingSurface();
     testInstalledStorageAndMigrationSafety();
+    testInstallerArchitecture();
     if (failureCount == 0)
         qInfo() << "All Lean Beeftext security-model tests passed.";
     return failureCount == 0 ? 0 : 1;

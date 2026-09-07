@@ -112,11 +112,19 @@ Windows may prevent a normal desktop application from inserting text into a high
 
 Lean Beeftext follows the Windows light or dark appearance setting. If you change the Windows appearance setting while Lean Beeftext is already running, restart Lean Beeftext to apply the change consistently.
 
-## Portable Edition
+## Install or Use Portable
 
-The portable package contains `Portable.bin`. It stores settings, combos, logs, and other application data under its local `Data` folder, so keep the package in a writable location and move that folder together with the executable.
+The normal Windows installer installs Lean Beeftext under `Program Files\Lean Beeftext` and creates a Start Menu shortcut. A desktop shortcut is optional and unchecked by default.
 
-Portable mode is currently the available QA/distribution path. The project plans to provide a normal Windows installer, but no installer is included yet.
+Installed Lean Beeftext stores restorable user data in `Lean Beeftext` beneath the Windows Documents known folder, including `Settings.ini`, `comboList.json`, user translations/configuration, and migration recovery copies. If OneDrive Known Folder Move redirects Documents, that folder naturally follows the redirected Documents location; Lean Beeftext does not configure OneDrive. Diagnostic logs and last-use caches remain in Lean-specific LocalAppData to avoid unnecessary document-sync churn.
+
+On the first installed launch, Lean Beeftext can detect a registered upstream Beeftext installation or a strongly identified portable copy, import only combos and groups, verify the saved result, and then offer the recommended cleanup of the old application. Nothing is removed before a recovery snapshot, parse, atomic save, fresh reload, and content validation all succeed. Differing libraries are never silently merged.
+
+Uninstall removes the application and its shortcuts but preserves the entire Documents data folder, so uninstalling and reinstalling does not discard user data.
+
+The portable package remains available. It contains `Portable.bin` and keeps settings, combos, logs, and other application data under its local `Data` folder. Keep that package in a writable location and move the folder together with the executable. Portable Lean Beeftext never uses installed Documents storage and never runs the installed migration assistant.
+
+See [INSTALLER.md](INSTALLER.md) for exact storage paths, installer identity, migration safeguards, and the unattended installation contract.
 
 ## Security Model
 
@@ -126,7 +134,7 @@ This is a design boundary, not a claim of formal certification or absolute secur
 
 ## Project Status
 
-Lean Beeftext 1.0.0 is based on Beeftext 16.0. Functional Windows QA covers the restricted substitution model, multiline modes, combo portability, portable isolation, and the current Windows user interface. The installer, updater design, and final icon/assets are separate future projects.
+Lean Beeftext 1.0.0 is based on Beeftext 16.0. Functional Windows QA covers the restricted substitution model, multiline modes, combo portability, portable isolation, and the current Windows user interface. The repository now builds both a normal Inno Setup installer and a portable package from the same tested commit. Network updater implementation and release signing remain future hardening work.
 
 ## Upstream Project
 
@@ -151,6 +159,7 @@ The supported CI build uses:
 - Windows and Visual Studio 2022
 - CMake
 - Qt 6.8 LTS for 64-bit MSVC 2022
+- Inno Setup 7.1.0 for the installed distribution
 - The recursively checked-out XMiLib and emojilib submodules
 
 From a Visual Studio 2022 developer environment with Qt available to CMake:
@@ -162,6 +171,6 @@ cmake --build build --config Release --parallel
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-The GitHub Actions Windows workflow performs the same configure, Release build, complete test run, clean-source checks, deployment, provenance recording, and packaged-file checksum generation. It produces a portable QA artifact; it does not build an installer.
+The GitHub Actions Windows workflow performs the same configure, Release build, complete test run, clean-source checks, shared installed/portable staging, provenance recording, and packaged-file checksum generation. It compiles the installer, checks the installed payload cannot activate portable mode, and exercises silent install, same-version reinstall, and data-preserving uninstall. It produces both a portable QA artifact and `Lean-Beeftext-Setup-1.0.0.exe` from the exact same source commit.
 
 Project links: [repository](https://github.com/jubalslone/Beeftext), [issues](https://github.com/jubalslone/Beeftext/issues), and [releases](https://github.com/jubalslone/Beeftext/releases).

@@ -45,7 +45,9 @@ Movement is enabled only when text after the last exact marker is printable ASCI
 
 Insertion refuses to proceed while Ctrl, Alt, Shift, or Windows modifiers are held. The original keyword remains intact. A timeout prevents indefinite waiting, and error paths restore the keyboard hook. Restricted tests cover refusal, event planning, modifier release behavior, and hook restoration guards; manual QA checks for stuck modifiers.
 
-## Portable Data Isolation
+## Installed and Portable Data Isolation
+
+Installed Lean Beeftext stores `Settings.ini`, `comboList.json`, user configuration/translations, backups, and migration recovery copies beneath the Windows Documents known folder in `Lean Beeftext`. It uses a permanent Lean-only settings identity and does not use upstream Beeftext's normal runtime namespace. Logs and last-use caches use Lean-specific LocalAppData. Live combo-list persistence uses atomic file replacement to reduce the risk of a truncated file during interruption or synchronized-folder activity.
 
 The portable package includes `Portable.bin`. Portable settings, combos, logs, and other application data live under package-local `Data`. The combo-list and custom-backup location controls are unavailable, updater cleanup cannot delete a path from old settings, and combo portability dialogs default to normal user-selected locations.
 
@@ -66,7 +68,13 @@ Legacy upstream Beeftext `.json` and `.csv` exports remain import-compatible. Ma
 
 ## Update Boundary
 
-The current restricted build disables automatic and manual upstream update checks, download/install code paths, updater cleanup, and custom PowerShell configuration. The installer and any future updater design are out of scope for 1.0.0 portable QA. Upstream changes must be reviewed and deliberately integrated into this fork.
+The current restricted build disables automatic and manual upstream update checks, download/install code paths, updater cleanup, and custom PowerShell configuration. The Inno installer provides no network updater, service, scheduled task, or privileged helper. Its unattended switches are only a future installer execution contract and do not bypass UAC or verify downloads. Upstream changes must be reviewed and deliberately integrated into this fork.
+
+## Upstream Migration Boundary
+
+First-run migration runs as the signed-in user and only in installed mode before a Lean combo library exists. It reads the upstream `beeftext.org` / `Beeftext` preferences only as detection clues and imports no upstream settings. A registered installed candidate must have internally consistent upstream display, install, executable, and uninstaller metadata. A portable candidate must have `Beeftext.exe`, the expected portable beacon, the expected data layout, and readable combo data; a filename alone is insufficient.
+
+Migration snapshots only the legacy combo JSON, parses it through the existing validated model (including safe plain-text conversion), writes the Lean copy atomically, reloads it into a fresh model, and compares normalized content and group/combo counts. Cleanup is gated on every validation step. Installed cleanup invokes the registered uninstaller and leaves the legacy profile. Portable cleanup uses the Recycle Bin and revalidates the fingerprint/content digest; it refuses shared roots such as Desktop, Downloads, Documents, the user profile, drive roots, Program Files, Windows, and the active application directory. Persisted import/cleanup state prevents a cleanup retry from importing duplicate combos.
 
 ## Known Windows Boundaries
 
@@ -76,13 +84,13 @@ Windows 11 Notepad may corrupt rapid `KEYEVENTF_UNICODE` input when spellcheck o
 
 ## Build, Provenance, and Reproducibility
 
-The Windows workflow checks out the exact requested commit and recursive submodules, verifies tracked source is clean before and after the build, builds Release sources, runs the complete restricted regression suite, packages runtime dependencies and project notices, records the source commit in `BUILD_INFO.txt`, and creates `SHA256SUMS.txt` for every packaged file.
+The Windows workflow checks out the exact requested commit and recursive submodules, verifies tracked source is clean before and after the build, builds Release sources, runs the complete restricted regression suite, stages installed and portable payloads through one script, records the source commit in `BUILD_INFO.txt`, and creates `SHA256SUMS.txt` for every packaged file. It pins and hash-verifies the Inno compiler, rejects portable beacons from installed staging, and smoke-tests install/reinstall/uninstall while verifying a synthetic Documents fixture survives.
 
 Routine pull-request QA artifacts are unsigned. The separately gated production signing design is documented in `ARTIFACT_SIGNING.md`; it requires reviewed external Azure configuration and has no silent unsigned fallback.
 
 ## Windows QA Checklist
 
-1. Extract the portable artifact to a writable folder. Confirm `Portable.bin`, `BUILD_INFO.txt`, `SHA256SUMS.txt`, `LICENSE`, `README.md`, `SECURITY_MODEL.md`, and `THIRD_PARTY_NOTICES.md` are present. Launch `LeanBeeftext.exe` without elevation.
+1. Test both distributions. Install with UAC and confirm the Program Files payload, Start Menu shortcut, optional unchecked desktop shortcut, and normal-user launch. Confirm `<Documents>\Lean Beeftext` is created and uninstall preserves it. Extract portable to a writable folder and confirm `Portable.bin`, `BUILD_INFO.txt`, `SHA256SUMS.txt`, `LICENSE`, `README.md`, `SECURITY_MODEL.md`, and `THIRD_PARTY_NOTICES.md` are present.
 2. On fresh settings, confirm the application follows Windows Light and Windows Dark. Confirm explicit Lean Light while Windows is Dark and explicit Lean Dark while Windows is Light. Restart and confirm each saved override persists.
 3. Confirm the Release menu order is **File | Combos | Groups | Help**, with no top-level Advanced menu. Confirm **Generate Cheat Sheet…** is at the bottom of Combos and **Open Diagnostic Log** is in Help.
 4. Test every Preferences pane at 100%, 125%, and 150% display scaling in system, Light, and Dark modes. Confirm native controls, focus, disabled states, and layout remain clear.
@@ -95,7 +103,8 @@ Routine pull-request QA artifacts are unsigned. The separately gated production 
 11. Confirm there are no backup/restore or Preferences import/export commands. Verify portable settings and combo data remain under local `Data`.
 12. Open every Help and About link. Confirm Lean-facing links target `jubalslone/Beeftext`, the Variables link ends in `#variables`, and upstream links are visibly labeled as upstream attribution.
 13. Confirm Project Documentation, Release Notes, Report Bug, Open Diagnostic Log, and About Lean Beeftext work. Inspect About product/version, portable status, maintainer, upstream author, translator credit, license/notices links, AI wording, and build provenance.
-14. With a network monitor if available, launch the application and open Preferences. Confirm there is no update-service request.
+14. Exercise installed first-run migration with synthetic/dispensable upstream installed and portable copies. Confirm differing libraries require a choice, a failed import leaves both sources untouched, a successful import is reloaded before cleanup, portable removal goes to the Recycle Bin, shared-root removal is refused, and the full migration does not repeat on second launch.
+15. With a network monitor if available, launch the application and open Preferences. Confirm there is no update-service request.
 
 ## Review Limitations
 

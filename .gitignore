@@ -1,5 +1,8 @@
 .vs/
 _build/
+artifact/
+Installer/_output/
+Installer/_staging/
 _temp/
 _doc/
 GeneratedFiles/
