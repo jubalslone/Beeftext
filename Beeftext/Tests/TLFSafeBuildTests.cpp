@@ -512,7 +512,7 @@ void testProductFinishingSurface() {
 		&& constantsSource.contains("kUpstreamVersion = \"16.0\""),
 		"public product identity is Lean Beeftext 1.0.0 based on Beeftext 16.0");
 	QRegularExpression const singleInstancePattern(
-		R"(kSingleInstanceIdentifier\s*=\s*"([^"]+)")");
+		R"regex(kSingleInstanceIdentifier\s*=\s*"([^"]+)")regex");
 	QRegularExpressionMatch const singleInstanceMatch = singleInstancePattern.match(constantsSource);
 	QString const singleInstanceIdentifier = singleInstanceMatch.captured(1);
 	expect(singleInstanceMatch.hasMatch()
