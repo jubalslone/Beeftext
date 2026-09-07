@@ -535,15 +535,49 @@ void testProductFinishingSurface() {
 
 	QString const preferencesSource = readSourceFile("Preferences/PreferencesManager.cpp");
 	QString const preferencesHeader = readSourceFile("Preferences/PreferencesManager.h");
-	expect(preferencesSource.contains("kDefaultUseCustomTheme = false")
-		&& preferencesHeader.contains("bool useCustomTheme { false }"),
-		"fresh settings follow the Windows theme");
-	expect(preferencesSource.contains("readSettings<bool>(settings_, kKeyUseCustomTheme, kDefaultUseCustomTheme)")
-		&& preferencesSource.contains("settings_->setValue(kKeyUseCustomTheme, value)"),
-		"stored explicit Light or Dark override state still wins and persists");
-	expect(readSourceFile("Preferences/Panes/PrefPaneAppearance.ui").contains("Override Windows theme")
-		&& readSourceFile("Preferences/Panes/PrefPaneAppearance.ui").contains("follows the Windows light or dark theme"),
-		"Appearance explains system following and explicit override behavior");
+	QString const appearanceUi = readSourceFile("Preferences/Panes/PrefPaneAppearance.ui");
+	QString const preferencesDialogUi = readSourceFile("Preferences/PreferencesDialog.ui");
+	QString const themeSource = readSourceFile("Theme.cpp");
+	QString const pickerDelegateSource = readSourceFile("Picker/PickerItemDelegate.cpp");
+	expect(!appearanceUi.contains("Override Windows theme")
+		&& !appearanceUi.contains("Use custom theme")
+		&& !appearanceUi.contains("checkUseCustomTheme")
+		&& !appearanceUi.contains("comboTheme")
+		&& !appearanceUi.contains(">Light<")
+		&& !appearanceUi.contains(">Dark<"),
+		"Preferences exposes no custom Light or Dark theme controls");
+	expect(preferencesDialogUi.contains("<string>Language</string>")
+		&& preferencesDialogUi.contains("paneAppearance")
+		&& appearanceUi.contains("comboLocale")
+		&& appearanceUi.contains("buttonTranslationFolder"),
+		"the simplified Language pane retains useful locale controls");
+	expect(!preferencesSource.contains("UseCustomTheme")
+		&& !preferencesSource.contains("kKeyTheme")
+		&& !preferencesHeader.contains("useCustomTheme")
+		&& !preferencesHeader.contains("ETheme"),
+		"legacy stored theme keys are ignored rather than read, written, reset, or cached");
+	expect(preferencesSource.contains("applySystemTheme();")
+		&& themeSource.contains("applySystemTheme()")
+		&& themeSource.contains("StyleNoCustom.qss")
+		&& !themeSource.contains("setPalette")
+		&& !themeSource.contains("setColorScheme")
+		&& !themeSource.contains("lightPalette")
+		&& !themeSource.contains("darkPalette")
+		&& !themeSource.contains("StyleLight.qss")
+		&& !themeSource.contains("StyleDark.qss"),
+		"startup preserves the Windows and Qt system palette without forcing Light or Dark");
+	expect(pickerDelegateSource.contains("option.palette.color")
+		&& !pickerDelegateSource.contains("PreferencesManager")
+		&& !pickerDelegateSource.contains("useCustomTheme"),
+		"the picker follows its active system palette instead of a Lean theme preference");
+	expect(!readSourceFile("Beeftext.qrc").contains("StyleCommon.qss")
+		&& !readSourceFile("Beeftext.qrc").contains("StyleLight.qss")
+		&& !readSourceFile("Beeftext.qrc").contains("StyleDark.qss")
+		&& readSourceFile("Beeftext.qrc").contains("StyleNoCustom.qss"),
+		"custom theme styles are removed while the palette-driven picker framing remains");
+	expect(readRepositoryFile("README.md").contains("Lean Beeftext follows the Windows light or dark appearance setting.")
+		&& readRepositoryFile("README.md").contains("restart Lean Beeftext to apply the change consistently."),
+		"documentation states the system-appearance rule and restart caveat");
 
 	QString const mainUi = readSourceFile("MainWindow.ui");
 	QString const mainSource = readSourceFile("MainWindow.cpp");

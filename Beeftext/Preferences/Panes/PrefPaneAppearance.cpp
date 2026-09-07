@@ -1,7 +1,7 @@
 ﻿/// \file
 /// \author 
 ///
-/// \brief Implementation of the appearance preference pane
+/// \brief Implementation of the language preference pane
 ///  
 /// Copyright (c) . All rights reserved.  
 /// Licensed under the MIT License. See LICENSE file in the project root for full license information. 
@@ -23,12 +23,9 @@ PrefPaneAppearance::PrefPaneAppearance(QWidget *parent)
 
     connect(ui_.buttonRefresh, &QPushButton::clicked, this, &PrefPaneAppearance::onRefreshLanguageList);
     connect(ui_.buttonTranslationFolder, &QPushButton::clicked, this, &PrefPaneAppearance::onOpenTranslationFolder);
-    connect(ui_.checkUseCustomTheme, &QPushButton::toggled, this, &PrefPaneAppearance::onCheckUseCustomTheme);
     connect(ui_.comboLocale, &QComboBox::currentIndexChanged, this, &PrefPaneAppearance::onComboLanguageValueChanged);
-    connect(ui_.comboTheme, &QComboBox::currentIndexChanged, this, &PrefPaneAppearance::onComboThemeValueChanged);
 
     I18nManager::instance().fillLocaleCombo(*ui_.comboLocale);
-    fillThemeComboBox(*ui_.comboTheme);
 }
 
 
@@ -36,17 +33,8 @@ PrefPaneAppearance::PrefPaneAppearance(QWidget *parent)
 // 
 //****************************************************************************************************************************************************
 void PrefPaneAppearance::load() const {
-#pragma clang diagnostic push
-#pragma ide diagnostic ignored "UnusedValue"
     QSignalBlocker blocker = QSignalBlocker(ui_.comboLocale);
     this->onRefreshLanguageList();
-    blocker = QSignalBlocker(ui_.checkUseCustomTheme);
-    ui_.checkUseCustomTheme->setChecked(prefs_.useCustomTheme());
-    blocker = QSignalBlocker(ui_.comboTheme);
-    selectThemeInCombo(prefs_.theme(), *ui_.comboTheme);
-#pragma clang diagnostic pop
-
-    this->updateGui();
 }
 
 
@@ -83,39 +71,11 @@ void PrefPaneAppearance::onOpenTranslationFolder() {
 
 
 //****************************************************************************************************************************************************
-/// \param[in] checked Is the radio button checked?
-//****************************************************************************************************************************************************
-void PrefPaneAppearance::onCheckUseCustomTheme(bool checked) const {
-    prefs_.setUseCustomTheme(checked);
-    this->updateGui();
-}
-
-
-//****************************************************************************************************************************************************
-// 
-//****************************************************************************************************************************************************
-void PrefPaneAppearance::onComboThemeValueChanged(int) const {
-    prefs_.setTheme(selectedThemeInCombo(*ui_.comboTheme));
-}
-
-
-//****************************************************************************************************************************************************
-//
-//****************************************************************************************************************************************************
-void PrefPaneAppearance::updateGui() const {
-    ui_.comboTheme->setEnabled(prefs_.useCustomTheme());
-}
-
-
-//****************************************************************************************************************************************************
 /// \param[in] event The event.
 //****************************************************************************************************************************************************
 void PrefPaneAppearance::changeEvent(QEvent *event) {
     if (QEvent::LanguageChange == event->type()) {
         ui_.retranslateUi(this);
-        QSignalBlocker blocker(ui_.comboTheme);
-        fillThemeComboBox(*ui_.comboTheme);
-        selectThemeInCombo(prefs_.theme(), *ui_.comboTheme);
     }
     PrefPane::changeEvent(event);
 }

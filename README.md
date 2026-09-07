@@ -110,7 +110,7 @@ Windows may prevent a normal desktop application from inserting text into a high
 
 ## Themes
 
-Fresh settings follow the Windows light or dark theme. In Preferences > Appearance, **Override Windows theme** lets you choose an explicit Light or Dark theme. Existing saved overrides continue to be honored. A Windows theme change made while Lean Beeftext is already running may require restarting the application.
+Lean Beeftext follows the Windows light or dark appearance setting. If you change the Windows appearance setting while Lean Beeftext is already running, restart Lean Beeftext to apply the change consistently.
 
 ## Portable Edition
 

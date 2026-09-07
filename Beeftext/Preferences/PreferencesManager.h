@@ -12,7 +12,6 @@
 
 
 #include "Shortcut.h"
-#include "Theme.h"
 #include "Combo/MatchingMode.h"
 #include "Combo/CaseSensitivity.h"
 #include <XMiLib/VersionNumber/VersionNumber.h>
@@ -60,8 +59,6 @@ public: // member functions
     QString customSoundPath() const; ///< Set the value for the 'Custom sound path' preferences.
     void setAutoCheckForUpdates(bool value); ///< Set the value for the 'Auto check for updates preference
     bool autoCheckForUpdates() const; ///< Set the value for the 'Auto check for updates preference
-    void setUseCustomTheme(bool value) const; ///< Set the value for the 'Use custom theme' preference
-    bool useCustomTheme() const; ///< Get the value for the 'Use custom theme' preference
     void setUseAutomaticSubstitution(bool value) const; ///< Set the value for the 'Use automatic substitution' preference
     bool useAutomaticSubstitution() const; ///< Get the value for the 'Use automatic substitution' preference
     void setAllowRealLineBreaksInSnippets(bool value) const; ///< Set whether restricted snippets may insert real line breaks.
@@ -128,8 +125,6 @@ public: // member functions
     bool useCustomPowershellVersion() const; ///< Get the value for the 'Use custom PowerShell version'.
     void setCustomPowershellPath(QString const &path) const; ///< Set the value for the 'Custom PowerShell Path'.
     QString customPowershellPath() const; ///< Set the value for the 'Custom PowerShell Path'.
-    void setTheme(ETheme theme) const; ///< Set the theme parameter.
-    ETheme theme() const; ///< Get the theme.
     void setComboPickerWindowGeometry(QByteArray const &geometry) const; ///< Set the geometry of the combo picker window
     QByteArray comboPickerWindowGeometry() const; ///< Get the geometry of the combo picker.
     void setUseShiftInsertForPasting(bool value) const; ///< Get the value for the 'Shift+Insert for pasting' preference
@@ -177,15 +172,12 @@ private: // data members
         QString emojiRightDelimiter; ///< Cached value for the 'emoji right delimiter' preference.
         bool showEmojisInPickerWindow { false }; ///< Cached value for the 'Show emojis in picker window' preference.
         bool beeftextEnabled { true }; ///< Cached value for the 'Beeftext enabled' preference.
-        bool useCustomTheme { false }; ///< Cached value for the explicit theme override preference.
-        ETheme theme { ETheme::Light }; ///< Cached value for the 'Theme' preference.
         bool useShiftInsertForPasting { false }; ///< Cached value for use 'Use Shift+Insert for pasting' preference.
 
     private: // member functions
         void cacheComboTriggerShortcut(); ///< Read the combo trigger shortcut and cache it for faster access
         void cacheComboPickerShortcut(); ///< Read the combo picker shortcut and cache it for faster access
         void cacheAppEnableDisableShortcut(); ///< Read the app enable/disable shortcut and cache it for faster access.
-        void cacheThemePrefs(); ///< Read the theme and cache it for faster access.
         EMatchingMode readDefaultMatchingModeFromPreferences() const; ///< Get the value for the 'Default matching mode' preference.
         ECaseSensitivity readDefaultCaseSensitivityFromPreferences() const; ///< Get the value for the 'Default case sensitivity' preference.
 

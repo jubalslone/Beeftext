@@ -67,7 +67,6 @@ QString const kKeySplitterState = "MainWindowSplitterState"; ///< The setting ke
 QString const kKeyUseAutomaticSubstitution = "UseAutomaticSubstitution"; ///< The setting key for the 'Use automatic substitution' preference
 QString const kKeyUseCustomBackupLocation = "UseCustomBackupLocation"; ///< The settings key for the 'Use custom backup location' preference.
 QString const kKeyUseCustomSound = "UseCustomSound"; ///< The settings key for the 'Use custom sound' preference.
-QString const kKeyUseCustomTheme = "UseCustomTheme"; ///< The setting key for the 'Use custom theme' preference
 QString const kKeyWarnAboutShortComboKeyword = "WarnAboutShortComboKeyword"; ///< The setting key for the 'Warn about short combo keyword' preference
 QString const kKeyWarnAboutEmptyComboKeyword = "WarnAboutEmptyComboKeyword"; ///< The setting key for the 'Warn about empty combo keyword' preference
 QString const kKeyWriteDebugLogFile = "WriteDebugLogFile"; ///< The setting key for the 'Write debug log file' preference.
@@ -79,7 +78,6 @@ QString const kKeyKeepFinalSpaceCharacter = "KeepFinalSpaceCharacter"; ///< The 
 QString const kKeyAlreadyConvertedRichTextCombos = "AlreadyConvertedRichTextCombos"; ///< The setting key for the 'Already converted rich text combos' preference.
 QString const kKeyUseCustomPowershellVersion = "UseCustomPowershellVersion"; ///< The setting key for the 'Use custom PowerShell version'.
 QString const kKeyCustomPowershellPath = "CustomPowershellPath"; ///< The setting key for the 'Custom PowerShell path'.
-QString const kKeyTheme = "Theme"; ///< The setting key for the 'Theme' preference.
 QString const kKeyComboPickerWindowGeometry = "ComboPickerWindowGeometry"; ///< The settings key for the combo picker geometry.
 QString const kKeyUseShiftInsertForPasting = "UseShiftInsertForPasting"; ///< The settings key for the 'Use Shift+Insert for pasting' preference
 QString const kKeySkipVersionNumber = "SkipVersionNumber"; ///< The settings key for the 'skip version number' preference.
@@ -110,7 +108,6 @@ bool constexpr kDefaultPlaySoundOnCombo = true; ///< The default value for the '
 bool constexpr kDefaultUseAutomaticSubstitution = true; ///< The default value for the 'Use automatic substitution' preference
 bool constexpr kDefaultUseCustomBackupLocation = false; ///< The default value for the 'Use custom backup location' preference.
 bool constexpr kDefaultUseCustomSound = false; ///< The default value for the 'Use custom sound' preference.
-bool constexpr kDefaultUseCustomTheme = false; ///< By default, follow the Windows theme.
 bool constexpr kDefaultWarnAboutShortComboKeyword = true; ///< The default value for the 'Warn about short combo keyword' preference
 bool constexpr kDefaultWarnAboutEmptyComboKeyword = true; ///< The default value for the 'Warn about empty combo keyword' preference
 bool constexpr kDefaultWriteDebugLogFile = true; ///< The default value for the 'Write debug log file' preference
@@ -120,7 +117,6 @@ bool constexpr kDefaultRestoreClipboardAfterSubstitution = true; ///< The defaul
 bool constexpr kDefaultComboTriggersOnSpace = false; ///< The default value for the 'Combo triggers on space' preference.
 bool constexpr kDefaultKeepFinalSpaceCharacter = false; ///< The default value for the 'Combo triggers on space' preference.
 bool constexpr kDefaultUseCustomPowershellVersion = false; ///< The default value for the 'Use custom PowerShell version' preference.
-ETheme constexpr kDefaultTheme = ETheme::Light; ///< The default value for the theme preference.
 bool constexpr kDefaultUseShiftInsertForPasting = false; ///< The default value for the 'Use Shift+Insert for pasting' preference.
 
 }
@@ -208,7 +204,6 @@ void PreferencesManager::Cache::init() {
     showEmojisInPickerWindow = ::readSettings<bool>(settings_, kKeyShowEmojisInPickerWindow, kDefaultShowEmojisInPickerWindow);
     enableAppEnableDisableShortcut = ::readSettings<bool>(settings_, kKeyEnableAppEnableDisableShortcut, kDefaultEnableAppEnableDisableShortcut);
     cacheAppEnableDisableShortcut();
-    cacheThemePrefs();
     emojiLeftDelimiter = ::readSettings<QString>(settings_, kKeyEmojiLeftDelimiter, kDefaultEmojiLeftDelimiter);
     emojiRightDelimiter = ::readSettings<QString>(settings_, kKeyEmojiRightDelimiter, kDefaultEmojiRightDelimiter);
     beeftextEnabled = ::readSettings<bool>(settings_, kKeyBeeftextEnabled, kDefaultBeeftextEnabled);
@@ -272,18 +267,6 @@ void PreferencesManager::Cache::cacheAppEnableDisableShortcut() {
         return;
     }
     appEnableDisableShortcut = kDefaultAppEnableDisableShortcut;
-}
-
-
-//****************************************************************************************************************************************************
-//
-//****************************************************************************************************************************************************
-void PreferencesManager::Cache::cacheThemePrefs() {
-    qint32 const intValue = ::readSettings<qint32>(settings_, kKeyTheme, static_cast<qint32>(kDefaultTheme));
-    theme = ((intValue < 0) || (intValue >= static_cast<qint32>(ETheme::Count))) ? kDefaultTheme
-        : static_cast<ETheme>(intValue);
-
-    useCustomTheme = ::readSettings<bool>(settings_, kKeyUseCustomTheme, kDefaultUseCustomTheme);
 }
 
 
@@ -356,7 +339,7 @@ QSettings &PreferencesManager::settings() {
 //****************************************************************************************************************************************************
 void PreferencesManager::init() const {
     cache_->init();
-    applyThemePreferences(this->useCustomTheme(), this->theme());
+    applySystemTheme();
     this->applyLocalePreference();
 }
 
@@ -387,8 +370,6 @@ void PreferencesManager::reset() {
     this->setComboTriggersOnSpace(kDefaultComboTriggersOnSpace);
     this->setKeepFinalSpaceCharacter(kDefaultKeepFinalSpaceCharacter);
     this->setUseCustomBackupLocation(kDefaultUseCustomBackupLocation);
-    this->setUseCustomTheme(kDefaultUseCustomTheme);
-    this->setTheme(static_cast<ETheme>(kDefaultTheme));
     this->setUseCustomSound(kDefaultUseCustomSound);
     this->setWarnAboutShortComboKeywords(kDefaultWarnAboutShortComboKeyword);
     this->setWriteDebugLogFile(kDefaultWriteDebugLogFile);
@@ -609,26 +590,6 @@ void PreferencesManager::setAutoCheckForUpdates(bool value) {
 //****************************************************************************************************************************************************
 bool PreferencesManager::autoCheckForUpdates() const {
     return this->readSettings<bool>(kKeyAutoCheckForUpdates, kDefaultAutoCheckForUpdates);
-}
-
-
-//****************************************************************************************************************************************************
-/// \param[in] value The value for the preference
-//****************************************************************************************************************************************************
-void PreferencesManager::setUseCustomTheme(bool value) const {
-    if (this->useCustomTheme() != value) {
-        settings_->setValue(kKeyUseCustomTheme, value);
-        cache_->useCustomTheme = value;
-        applyThemePreferences(value, this->theme());
-    }
-}
-
-
-//****************************************************************************************************************************************************
-/// \return The value for the preference
-//****************************************************************************************************************************************************
-bool PreferencesManager::useCustomTheme() const {
-    return cache_->useCustomTheme;
 }
 
 
@@ -1258,24 +1219,6 @@ QString PreferencesManager::customPowershellPath() const {
     if constexpr (constants::kRestrictedBuild)
         return QString();
     return readSettings<QString>(kKeyCustomPowershellPath, QString());
-}
-
-
-//****************************************************************************************************************************************************
-/// \param[in] theme The theme.
-//****************************************************************************************************************************************************
-void PreferencesManager::setTheme(ETheme theme) const {
-    settings_->setValue(kKeyTheme, static_cast<qint32>(theme));
-    cache_->theme = theme;
-    applyThemePreferences(this->useCustomTheme(), theme);
-}
-
-
-//****************************************************************************************************************************************************
-/// \return The theme.
-//****************************************************************************************************************************************************
-ETheme PreferencesManager::theme() const {
-    return cache_->theme;
 }
 
 

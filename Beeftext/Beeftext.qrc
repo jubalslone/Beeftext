@@ -1,9 +1,6 @@
 <RCC>
     <qresource prefix="/MainWindow">
-        <file>Resources/StyleDark.qss</file>
-        <file>Resources/StyleLight.qss</file>
         <file>Resources/ArrowUp.png</file>
-        <file>Resources/StyleCommon.qss</file>
         <file>Resources/Icons/App/LeanBeeftextApp-32.png</file>
         <file>Resources/Icons/App/LeanBeeftextApp-128.png</file>
         <file>Resources/Icons/LeanBeeftextApp.ico</file>

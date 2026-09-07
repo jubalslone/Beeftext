@@ -397,15 +397,6 @@
     <None Include="Translations\beeftext_pt_PT.ts">
       <Filter>Translation Files</Filter>
     </None>
-    <None Include="Resources\StyleCommon.qss">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="Resources\StyleDark.qss">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="Resources\StyleLight.qss">
-      <Filter>Resource Files</Filter>
-    </None>
     <None Include="Resources\StyleNoCustom.qss">
       <Filter>Resource Files</Filter>
     </None>
