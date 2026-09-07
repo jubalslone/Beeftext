@@ -63,7 +63,9 @@ int main(int argc, char *argv[]) {
         QApplication app(argc, argv);
 
         // check for an existing instance of the application
-        SingleInstanceApplication const singleInstanceApp("BeeftextSingleInstanceIdentifier");
+        // Lean and upstream Beeftext intentionally use different process identities
+        // so both applications can run at the same time.
+        SingleInstanceApplication const singleInstanceApp(constants::kSingleInstanceIdentifier);
         if (!singleInstanceApp.isFirstInstance()) {
             // SingleInstance app detected that another instance is running and 'put a flag in memory to indicate
             // to the other instance that another one tried to be created
@@ -75,8 +77,9 @@ int main(int argc, char *argv[]) {
 
         QGuiApplication::setQuitOnLastWindowClosed(false);
         QGuiApplication::setOrganizationName(constants::kOrganizationName);
-        // Keep the legacy internal identity so installed settings and AppLocalData
-        // continue to resolve to the existing Beeftext locations after rebranding.
+        // Temporarily keep the legacy data identity so existing settings and
+        // AppLocalData remain available. This is independent of the Lean-specific
+        // single-instance identity and will be revisited with installer migration.
         QGuiApplication::setApplicationName(constants::kSettingsApplicationName);
         QGuiApplication::setApplicationDisplayName(constants::kApplicationName);
         QGuiApplication::setApplicationVersion(constants::kProductVersion);

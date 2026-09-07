@@ -20,7 +20,11 @@ namespace constants {
 xmilib::VersionNumber const kVersionNumber(16, 0);
 QString const kProductVersion = "1.0.0";
 QString const kUpstreamVersion = "16.0";
+QString const kSingleInstanceIdentifier = "LeanBeeftextSingleInstanceIdentifier";
 QString const kApplicationName = "Lean Beeftext";
+// Keep the legacy data identity temporarily so existing non-portable settings
+// and AppLocalData remain available until the installer architecture defines
+// an explicit migration. This is separate from the Lean-specific process ID.
 QString const kSettingsApplicationName = "Beeftext";
 QString const kOrganizationName = "beeftext.org";
 QString const kBeeftextWikiHomeUrl = "https://github.com/jubalslone/Beeftext";

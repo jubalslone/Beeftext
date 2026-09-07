@@ -511,6 +511,15 @@ void testProductFinishingSurface() {
 		&& constantsSource.contains("kProductVersion = \"1.0.0\"")
 		&& constantsSource.contains("kUpstreamVersion = \"16.0\""),
 		"public product identity is Lean Beeftext 1.0.0 based on Beeftext 16.0");
+	QRegularExpression const singleInstancePattern(
+		R"(kSingleInstanceIdentifier\s*=\s*"([^"]+)")");
+	QRegularExpressionMatch const singleInstanceMatch = singleInstancePattern.match(constantsSource);
+	QString const singleInstanceIdentifier = singleInstanceMatch.captured(1);
+	expect(singleInstanceMatch.hasMatch()
+		&& singleInstanceIdentifier == "LeanBeeftextSingleInstanceIdentifier"
+		&& !singleInstanceIdentifier.contains(QRegularExpression(R"(\d)"))
+		&& constantsHeader.contains("kSingleInstanceIdentifier"),
+		"Lean uses a named, stable, version-free single-instance identity");
 	expect(constantsSource.contains("kVersionNumber(16, 0)")
 		&& !readSourceFile("Dialogs/AboutDialog.cpp").contains("kVersionNumber")
 		&& readRepositoryFile("CMakeLists.txt").contains("VERSION 1.0.0")
@@ -518,8 +527,9 @@ void testProductFinishingSurface() {
 		&& readSourceFile("Beeftext.rc").contains("VERSION_STRING \"1.0.0\\0\""),
 		"public metadata is 1.0.0 while the disabled updater keeps its two-part upstream compatibility value");
 	expect(constantsSource.contains("kSettingsApplicationName = \"Beeftext\"")
+		&& constantsSource.contains("kOrganizationName = \"beeftext.org\"")
 		&& constantsHeader.contains("kSettingsApplicationName"),
-		"the legacy settings namespace is explicit and preserved");
+		"the legacy settings and AppLocalData namespace is intentionally preserved");
 	expect(constantsSource.contains("https://github.com/jubalslone/Beeftext#variables"),
 		"About Variables uses the README Variables anchor");
 
@@ -542,6 +552,9 @@ void testProductFinishingSurface() {
 		&& entryPointSource.contains("setApplicationDisplayName(constants::kApplicationName)")
 		&& entryPointSource.contains("setApplicationVersion(constants::kProductVersion)"),
 		"the public display name and version change without moving existing AppLocalData");
+	expect(entryPointSource.contains("singleInstanceApp(constants::kSingleInstanceIdentifier)")
+		&& !entryPointSource.contains("\"BeeftextSingleInstanceIdentifier\""),
+		"single-instance enforcement uses the Lean identity instead of the upstream identifier");
 	expect(mainSource.contains("removeAction(ui_.menu_Advanced->menuAction())")
 		&& mainSource.contains("insertMenu(ui_.menu_Help->menuAction(), combosMenu_)")
 		&& mainSource.contains("insertMenu(ui_.menu_Help->menuAction(), groupsMenu_)"),
