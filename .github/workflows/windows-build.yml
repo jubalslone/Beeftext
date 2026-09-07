@@ -78,7 +78,7 @@ jobs:
       - name: Run complete automated test suite
         shell: pwsh
         run: |
-          ctest --test-dir build -C Release --output-on-failure 2>&1 | Tee-Object -FilePath test-output.log
+          ctest --test-dir build -C Release --verbose 2>&1 | Tee-Object -FilePath test-output.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify build did not rewrite tracked source

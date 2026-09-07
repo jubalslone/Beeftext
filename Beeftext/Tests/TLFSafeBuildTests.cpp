@@ -22,6 +22,8 @@
 #include <QTemporaryDir>
 #include <QUuid>
 
+#include <cstdio>
+
 
 namespace {
 
@@ -32,6 +34,8 @@ int failureCount = 0;
 void expect(bool condition, QString const &description) {
     if (condition)
         return;
+	QByteArray const utf8Description = description.toUtf8();
+	std::fprintf(stderr, "FAILED: %s\n", utf8Description.constData());
     qCritical().noquote() << "FAILED:" << description;
     ++failureCount;
 }
@@ -40,6 +44,11 @@ void expect(bool condition, QString const &description) {
 void expectText(QString const &actual, QString const &expected, QString const &description) {
     if (actual == expected)
         return;
+	QByteArray const utf8Description = description.toUtf8();
+	QByteArray const utf8Expected = expected.toUtf8();
+	QByteArray const utf8Actual = actual.toUtf8();
+	std::fprintf(stderr, "FAILED: %s expected %s but got %s\n", utf8Description.constData(),
+		utf8Expected.constData(), utf8Actual.constData());
     qCritical().noquote() << "FAILED:" << description << "expected" << expected << "but got" << actual;
     ++failureCount;
 }
