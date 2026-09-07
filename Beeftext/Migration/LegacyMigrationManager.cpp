@@ -112,6 +112,17 @@ QString executableFromCommand(QString const &command) {
 }
 
 
+QString parametersFromCommand(QString const &command) {
+    QString const trimmed = command.trimmed();
+    if (trimmed.startsWith('"')) {
+        qsizetype const closingQuote = trimmed.indexOf('"', 1);
+        return closingQuote < 0 ? QString() : trimmed.mid(closingQuote + 1).trimmed();
+    }
+    qsizetype const whitespace = trimmed.indexOf(QRegularExpression("\\s"));
+    return whitespace < 0 ? QString() : trimmed.mid(whitespace + 1).trimmed();
+}
+
+
 QList<LegacySource> registeredInstalledSources() {
     QList<LegacySource> result;
     QString const configuredCombo = legacyConfiguredComboFilePath();
@@ -242,7 +253,7 @@ bool invokeUninstaller(LegacySource const &source) {
     if (parts.isEmpty())
         return false;
     QString const executable = parts.takeFirst();
-    QString const parameters = QProcess::joinCommand(parts);
+    QString const parameters = parametersFromCommand(command);
     SHELLEXECUTEINFOW info = {};
     info.cbSize = sizeof(info);
     info.fMask = SEE_MASK_NOCLOSEPROCESS;

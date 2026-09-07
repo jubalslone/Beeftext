@@ -2,8 +2,12 @@
 /// \brief Testable safety rules for one-time upstream Beeftext migration.
 
 
-#include "stdafx.h"
 #include "LegacyMigrationCore.h"
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QHash>
+#include <QProcess>
 
 
 namespace migration {
