@@ -73,10 +73,12 @@ Those switches do not bypass UAC. Same-version reinstall is permitted; downgrade
 
 No network updater is implemented. A future updater is expected to download and cryptographically verify this same installer, obtain user approval, exit Lean Beeftext, run Setup, and relaunch Lean Beeftext.
 
-## First-run upstream migration safety
+## First-run compatible migration safety
 
-Migration runs in the application as the signed-in user, only for installed Lean Beeftext, and only before a Lean combo library exists. It detects registered upstream Beeftext installations and strongly fingerprinted portable copies in running-process/shortcut locations or a shallow Desktop/Downloads search. An arbitrary file named `Beeftext.exe` is insufficient.
+Migration runs in the application as the signed-in user, only for installed Lean Beeftext, and only before a Lean combo library exists. It detects registered upstream Beeftext installations and strongly fingerprinted upstream or Lean portable copies through matching shortcuts, existing upstream-process evidence, or a shallow Desktop/Downloads search. The shallow scan checks only each root and its immediate child directories.
 
-Only combos and groups are imported. Upstream preferences are not adopted. Differing legacy libraries are presented as separate choices; byte-identical libraries may be grouped.
+A normal Lean portable fingerprint requires `LeanBeeftext.exe`, `Portable.bin`, and a readable, non-empty `Data\comboList.json`. The existing `PortableApps.bin` and `Data\settings\comboList.json` layout is also recognized. The containing folder name is irrelevant to detection, while a lone executable or incomplete layout is insufficient.
+
+Only combos and groups are imported. Upstream and portable Lean preferences are not adopted. Differing legacy libraries are presented as separate choices; byte-identical libraries may be grouped. Source labels distinguish `Portable Beeftext` from `Portable Lean Beeftext`.
 
 The sequence is recovery snapshot, parse, safe conversion, atomic persistence, fresh reload, and normalized content/count comparison. Cleanup is unavailable until all steps succeed. Installed cleanup prefers a registered quiet uninstaller only when its executable is inside the verified upstream installation root; otherwise it uses an equally verified registered normal uninstaller, or declines automatic removal. Portable cleanup uses the Recycle Bin, revalidates the fingerprint and content digest, and refuses Desktop, Downloads, Documents, the user profile, drive roots, Program Files, Windows, the active application directory, and any folder not clearly dedicated to Beeftext. Cleanup state is persisted before cleanup begins, so retrying cleanup cannot duplicate imported combos.

@@ -1,5 +1,5 @@
 /// \file
-/// \brief One-time installed-mode migration from upstream Beeftext.
+/// \brief One-time installed-mode migration from upstream Beeftext or portable Lean Beeftext.
 
 
 #include "stdafx.h"
@@ -28,6 +28,7 @@ QString const kPendingCleanupKey = "Migration/PendingCleanup";
 
 struct LegacySource {
     migration::ESourceType type { migration::ESourceType::Portable };
+    migration::EPortableProduct portableProduct { migration::EPortableProduct::UpstreamBeeftext };
     QString rootPath;
     QString executablePath;
     QString comboFilePath;
@@ -237,7 +238,7 @@ QString shortcutTarget(QString const &shortcutPath) {
 }
 
 
-QMap<QString, QStringList> beeftextShortcutTargets() {
+QMap<QString, QStringList> portableShortcutTargets() {
     QMap<QString, QStringList> result;
     QStringList roots = {
         QStandardPaths::writableLocation(QStandardPaths::DesktopLocation),
@@ -253,7 +254,9 @@ QMap<QString, QStringList> beeftextShortcutTargets() {
         while (iterator.hasNext()) {
             QString const shortcut = iterator.next();
             QString const target = shortcutTarget(shortcut);
-            if (QFileInfo(target).fileName().compare("Beeftext.exe", Qt::CaseInsensitive) == 0)
+            QString const fileName = QFileInfo(target).fileName();
+            if (fileName.compare("Beeftext.exe", Qt::CaseInsensitive) == 0 ||
+                fileName.compare("LeanBeeftext.exe", Qt::CaseInsensitive) == 0)
                 result[canonicalPath(target)].append(shortcut);
         }
     }
@@ -329,7 +332,8 @@ void addPortableCandidate(QList<LegacySource> &sources, QString const &executabl
     QStringList const &shortcuts = {}) {
     QString comboPath;
     QString rootPath;
-    if (!migration::isStrongPortableCandidate(executableFolder, &comboPath, &rootPath))
+    migration::EPortableProduct product;
+    if (!migration::isStrongPortableCandidate(executableFolder, &comboPath, &rootPath, &product))
         return;
     for (LegacySource &existing: sources) {
         if (existing.type == migration::ESourceType::Portable && samePath(existing.rootPath, rootPath)) {
@@ -340,14 +344,17 @@ void addPortableCandidate(QList<LegacySource> &sources, QString const &executabl
     }
     LegacySource source;
     source.type = migration::ESourceType::Portable;
+    source.portableProduct = product;
     source.rootPath = rootPath;
-    source.executablePath = QDir(executableFolder).absoluteFilePath("Beeftext.exe");
+    source.executablePath = QDir(executableFolder).absoluteFilePath(
+        product == migration::EPortableProduct::LeanBeeftext ? "LeanBeeftext.exe" : "Beeftext.exe");
     source.comboFilePath = comboPath;
     source.shortcutPaths = shortcuts;
     source.comboDigest = fileDigest(comboPath);
     source.modified = QFileInfo(comboPath).lastModified();
     source.cleanupSafe = !migration::isBroadCleanupRoot(rootPath, protectedCleanupRoots()) &&
-        QFileInfo(rootPath).fileName().contains("beeftext", Qt::CaseInsensitive);
+        (product == migration::EPortableProduct::LeanBeeftext ||
+            QFileInfo(rootPath).fileName().contains("beeftext", Qt::CaseInsensitive));
     if (!source.comboDigest.isEmpty())
         sources.append(source);
 }
@@ -357,7 +364,7 @@ QList<LegacySource> detectSources() {
     QList<LegacySource> sources;
 #ifdef _WIN32
     sources = registeredInstalledSources();
-    QMap<QString, QStringList> const shortcuts = beeftextShortcutTargets();
+    QMap<QString, QStringList> const shortcuts = portableShortcutTargets();
     for (auto iterator = shortcuts.constBegin(); iterator != shortcuts.constEnd(); ++iterator)
         addPortableCandidate(sources, QFileInfo(iterator.key()).absolutePath(), iterator.value());
     for (QString const &executable: runningBeeftextExecutables())
@@ -390,13 +397,17 @@ QList<LegacySource> detectSources() {
 
 
 QString sourceTypeName(LegacySource const &source) {
-    return source.type == migration::ESourceType::Installed ? QObject::tr("Installed") : QObject::tr("Portable");
+    if (source.type == migration::ESourceType::Installed)
+        return QObject::tr("Installed Beeftext");
+    return source.portableProduct == migration::EPortableProduct::LeanBeeftext ?
+        QObject::tr("Portable Lean Beeftext") : QObject::tr("Portable Beeftext");
 }
 
 
 QJsonObject sourceToJson(LegacySource const &source) {
     QJsonObject object;
     object["type"] = source.type == migration::ESourceType::Installed ? "installed" : "portable";
+    object["portableProduct"] = source.portableProduct == migration::EPortableProduct::LeanBeeftext ? "lean" : "upstream";
     object["rootPath"] = source.rootPath;
     object["executablePath"] = source.executablePath;
     object["comboFilePath"] = source.comboFilePath;
@@ -414,6 +425,8 @@ QJsonObject sourceToJson(LegacySource const &source) {
 LegacySource sourceFromJson(QJsonObject const &object) {
     LegacySource source;
     source.type = object["type"].toString() == "installed" ? migration::ESourceType::Installed : migration::ESourceType::Portable;
+    source.portableProduct = object["portableProduct"].toString() == "lean" ?
+        migration::EPortableProduct::LeanBeeftext : migration::EPortableProduct::UpstreamBeeftext;
     source.rootPath = object["rootPath"].toString();
     source.executablePath = object["executablePath"].toString();
     source.comboFilePath = object["comboFilePath"].toString();
@@ -431,7 +444,8 @@ LegacySource sourceFromJson(QJsonObject const &object) {
 
 bool writeRecoverySnapshot(LegacySource const &source, QString &outFolder, QString &outError) {
     QString const timestamp = QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmsszzz-'UTC'");
-    QString const type = source.type == migration::ESourceType::Installed ? "installed" : "portable";
+    QString const type = source.type == migration::ESourceType::Installed ? "installed" :
+        (source.portableProduct == migration::EPortableProduct::LeanBeeftext ? "portable-lean" : "portable-upstream");
     outFolder = QDir(globals::migrationBackupFolderPath()).absoluteFilePath(
         QString("%1-%2-%3").arg(timestamp, type, QString::fromLatin1(source.comboDigest.toHex().left(8))));
     if (!QDir().mkpath(outFolder)) {
@@ -490,9 +504,12 @@ bool cleanupSource(LegacySource const &source) {
     }
     QString comboPath;
     QString rootPath;
-    if (!migration::isStrongPortableCandidate(QFileInfo(source.executablePath).absolutePath(), &comboPath, &rootPath) ||
-        !samePath(rootPath, source.rootPath) || migration::isBroadCleanupRoot(rootPath, protectedCleanupRoots()) ||
-        !QFileInfo(rootPath).fileName().contains("beeftext", Qt::CaseInsensitive))
+    migration::EPortableProduct product;
+    if (!migration::isStrongPortableCandidate(QFileInfo(source.executablePath).absolutePath(), &comboPath, &rootPath, &product) ||
+        product != source.portableProduct || !samePath(rootPath, source.rootPath) ||
+        migration::isBroadCleanupRoot(rootPath, protectedCleanupRoots()) ||
+        (product == migration::EPortableProduct::UpstreamBeeftext &&
+            !QFileInfo(rootPath).fileName().contains("beeftext", Qt::CaseInsensitive)))
         return false;
     QStringList recycle = { rootPath };
     for (QString const &shortcut: source.shortcutPaths) {
@@ -575,7 +592,7 @@ MigrationChoice showMigrationDialog(QList<LegacySource> const &sources, QList<QL
     importCheck->setChecked(true);
     layout->addWidget(importCheck);
     auto *installedCheck = new QCheckBox(QObject::tr("Remove the old Beeftext installation after import succeeds (Recommended)"));
-    auto *portableCheck = new QCheckBox(QObject::tr("Remove the portable Beeftext copy after import succeeds (Recommended)"));
+    auto *portableCheck = new QCheckBox;
     layout->addWidget(installedCheck);
     layout->addWidget(portableCheck);
     auto *safety = new QLabel(QObject::tr("Nothing will be removed until your combos have been imported and verified."));
@@ -589,6 +606,8 @@ MigrationChoice showMigrationDialog(QList<LegacySource> const &sources, QList<QL
         qsizetype const group = sourceChoice->currentData().toLongLong();
         bool installed = false;
         bool portable = false;
+        bool leanPortable = false;
+        qsizetype portableCount = 0;
         QStringList lines;
         for (qsizetype const index: contentGroups[group]) {
             LegacySource const &source = sources[index];
@@ -599,7 +618,17 @@ MigrationChoice showMigrationDialog(QList<LegacySource> const &sources, QList<QL
                 lines.append(QObject::tr("This portable copy is in a shared folder, so Lean Beeftext will not remove it automatically."));
             installed |= source.type == migration::ESourceType::Installed && source.cleanupSafe;
             portable |= source.type == migration::ESourceType::Portable && source.cleanupSafe;
+            if (source.type == migration::ESourceType::Portable) {
+                ++portableCount;
+                leanPortable |= source.portableProduct == migration::EPortableProduct::LeanBeeftext;
+            }
         }
+        if (portableCount > 1)
+            portableCheck->setText(QObject::tr("Remove the detected portable copies after import succeeds (Recommended)"));
+        else if (leanPortable)
+            portableCheck->setText(QObject::tr("Remove the portable Lean Beeftext copy after import succeeds (Recommended)"));
+        else
+            portableCheck->setText(QObject::tr("Remove the portable Beeftext copy after import succeeds (Recommended)"));
         locations->setText(QObject::tr("Detected source locations:<br>%1").arg(lines.join("<br>")));
         installedCheck->setVisible(installed);
         portableCheck->setVisible(portable);

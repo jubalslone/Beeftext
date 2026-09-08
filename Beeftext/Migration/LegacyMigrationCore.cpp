@@ -1,5 +1,5 @@
 /// \file
-/// \brief Testable safety rules for one-time upstream Beeftext migration.
+/// \brief Testable safety rules for one-time compatible Beeftext migration.
 
 
 #include "LegacyMigrationCore.h"
@@ -8,6 +8,9 @@
 #include <QFileInfo>
 #include <QHash>
 #include <QProcess>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 
 
 namespace migration {
@@ -37,9 +40,15 @@ QString executableFromCommand(QString const &command) {
 
 
 bool isStrongPortableCandidate(QString const &executableFolder, QString *outComboFilePath,
-    QString *outDedicatedRootPath) {
+    QString *outDedicatedRootPath, EPortableProduct *outProduct) {
     QDir const appDir(executableFolder);
-    QString const executable = appDir.absoluteFilePath("Beeftext.exe");
+    QString const upstreamExecutable = appDir.absoluteFilePath("Beeftext.exe");
+    QString const leanExecutable = appDir.absoluteFilePath("LeanBeeftext.exe");
+    bool const hasUpstreamExecutable = QFileInfo(upstreamExecutable).isFile();
+    bool const hasLeanExecutable = QFileInfo(leanExecutable).isFile();
+    if (hasUpstreamExecutable == hasLeanExecutable)
+        return false;
+    EPortableProduct const product = hasLeanExecutable ? EPortableProduct::LeanBeeftext : EPortableProduct::UpstreamBeeftext;
     QString comboPath;
     QString rootPath;
     if (QFileInfo(appDir.absoluteFilePath("Portable.bin")).isFile()) {
@@ -53,14 +62,27 @@ bool isStrongPortableCandidate(QString const &executableFolder, QString *outComb
     }
 
     QFile comboFile(comboPath);
-    if (!QFileInfo(executable).isFile() || !QFileInfo(comboPath).isFile() ||
-        !comboFile.open(QIODevice::ReadOnly) || comboFile.readAll().trimmed().isEmpty())
+    if (!QFileInfo(comboPath).isFile() || !comboFile.open(QIODevice::ReadOnly))
         return false;
+    QByteArray const comboData = comboFile.readAll().trimmed();
+    if (comboData.isEmpty())
+        return false;
+    if (product == EPortableProduct::LeanBeeftext) {
+        QJsonParseError error;
+        QJsonDocument const document = QJsonDocument::fromJson(comboData, &error);
+        QJsonObject const root = document.object();
+        if (error.error != QJsonParseError::NoError || !document.isObject() ||
+            !root.value("fileFormatVersion").isDouble() || !root.value("combos").isArray() ||
+            (root.value("fileFormatVersion").toInt() >= 3 && !root.value("groups").isArray()))
+            return false;
+    }
 
     if (outComboFilePath)
         *outComboFilePath = QFileInfo(comboPath).absoluteFilePath();
     if (outDedicatedRootPath)
         *outDedicatedRootPath = QFileInfo(rootPath).absoluteFilePath();
+    if (outProduct)
+        *outProduct = product;
     return true;
 }
 

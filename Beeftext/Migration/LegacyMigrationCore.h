@@ -1,5 +1,5 @@
 /// \file
-/// \brief Testable safety rules for one-time upstream Beeftext migration.
+/// \brief Testable safety rules for one-time compatible Beeftext migration.
 
 #ifndef LEAN_BEEFTEXT_LEGACY_MIGRATION_CORE_H
 #define LEAN_BEEFTEXT_LEGACY_MIGRATION_CORE_H
@@ -16,6 +16,12 @@ namespace migration {
 enum class ESourceType {
     Installed,
     Portable,
+};
+
+
+enum class EPortableProduct {
+    UpstreamBeeftext,
+    LeanBeeftext,
 };
 
 
@@ -36,7 +42,7 @@ struct ValidationResult {
 
 
 bool isStrongPortableCandidate(QString const &executableFolder, QString *outComboFilePath = nullptr,
-    QString *outDedicatedRootPath = nullptr); ///< Require a beacon, expected data layout, executable, and readable combo data.
+    QString *outDedicatedRootPath = nullptr, EPortableProduct *outProduct = nullptr); ///< Require a beacon, expected data layout, one recognized executable, and readable combo data.
 bool isBroadCleanupRoot(QString const &candidateRoot, QStringList const &protectedRoots); ///< Refuse shared/general-purpose roots.
 bool isRecognizableInstalledCandidate(QString const &displayName, QString const &publisher,
 	QString const &installLocation, QString const &executablePath); ///< Identify upstream without granting cleanup permission.

@@ -727,13 +727,74 @@ void testInstalledStorageAndMigrationSafety() {
     combos.close();
     QString comboPath;
     QString cleanupRoot;
-    expect(migration::isStrongPortableCandidate(portable, &comboPath, &cleanupRoot)
+    migration::EPortableProduct upstreamProduct = migration::EPortableProduct::LeanBeeftext;
+    expect(migration::isStrongPortableCandidate(portable, &comboPath, &cleanupRoot, &upstreamProduct)
+        && upstreamProduct == migration::EPortableProduct::UpstreamBeeftext
         && QFileInfo(comboPath).fileName() == "comboList.json"
         && QFileInfo(cleanupRoot).fileName() == "Beeftext Portable",
         "strong portable detection requires the expected beacon/data layout");
     QFile::remove(QDir(portable).absoluteFilePath("Portable.bin"));
     expect(!migration::isStrongPortableCandidate(portable),
         "an arbitrary Beeftext.exe plus data is rejected without a portable beacon");
+
+    QString const leanPortable = root.absoluteFilePath("release-47");
+    QDir().mkpath(QDir(leanPortable).absoluteFilePath("Data"));
+    QFile leanExecutable(QDir(leanPortable).absoluteFilePath("LeanBeeftext.exe"));
+    expect(leanExecutable.open(QIODevice::WriteOnly) && leanExecutable.write("lean fixture") > 0,
+        "Lean portable fixture executable is created");
+    leanExecutable.close();
+    QFile leanBeacon(QDir(leanPortable).absoluteFilePath("Portable.bin"));
+    expect(leanBeacon.open(QIODevice::WriteOnly), "Lean portable fixture beacon is created");
+    leanBeacon.close();
+    QFile leanCombos(QDir(leanPortable).absoluteFilePath("Data/comboList.json"));
+    expect(leanCombos.open(QIODevice::WriteOnly) &&
+        leanCombos.write("{\"fileFormatVersion\":3,\"groups\":[],\"combos\":[]}") > 0,
+        "Lean portable fixture combo library is created");
+    leanCombos.close();
+    migration::EPortableProduct portableProduct = migration::EPortableProduct::UpstreamBeeftext;
+    expect(migration::isStrongPortableCandidate(leanPortable, &comboPath, &cleanupRoot, &portableProduct)
+        && portableProduct == migration::EPortableProduct::LeanBeeftext
+        && QFileInfo(cleanupRoot).fileName() == "release-47",
+        "LeanBeeftext.exe plus Portable.bin and readable combo data identifies Lean portable regardless of folder name");
+    expect(leanCombos.open(QIODevice::WriteOnly | QIODevice::Truncate) && leanCombos.write("not JSON") > 0,
+        "malformed Lean portable combo fixture is written");
+    leanCombos.close();
+    expect(!migration::isStrongPortableCandidate(leanPortable),
+        "LeanBeeftext.exe plus Portable.bin is rejected when combo data is malformed");
+    QFile::remove(QDir(leanPortable).absoluteFilePath("Data/comboList.json"));
+    expect(!migration::isStrongPortableCandidate(leanPortable),
+        "LeanBeeftext.exe plus Portable.bin is rejected without readable combo data");
+
+    QString const loneLean = root.absoluteFilePath("lone-application");
+    QDir().mkpath(loneLean);
+    QFile loneLeanExecutable(QDir(loneLean).absoluteFilePath("LeanBeeftext.exe"));
+    expect(loneLeanExecutable.open(QIODevice::WriteOnly) && loneLeanExecutable.write("lean fixture") > 0,
+        "lone Lean executable fixture is created");
+    loneLeanExecutable.close();
+    expect(!migration::isStrongPortableCandidate(loneLean),
+        "a lone LeanBeeftext.exe is not classified as portable");
+
+    QString const portableAppsRoot = root.absoluteFilePath("portable-apps-fixture");
+    QString const portableAppsExecutableFolder = QDir(portableAppsRoot).absoluteFilePath("App/LeanBeeftext");
+    QDir().mkpath(portableAppsExecutableFolder);
+    QDir().mkpath(QDir(portableAppsRoot).absoluteFilePath("Data/settings"));
+    QFile portableAppsExecutable(QDir(portableAppsExecutableFolder).absoluteFilePath("LeanBeeftext.exe"));
+    expect(portableAppsExecutable.open(QIODevice::WriteOnly) && portableAppsExecutable.write("lean fixture") > 0,
+        "Lean PortableApps executable fixture is created");
+    portableAppsExecutable.close();
+    QFile portableAppsBeacon(QDir(portableAppsExecutableFolder).absoluteFilePath("PortableApps.bin"));
+    expect(portableAppsBeacon.open(QIODevice::WriteOnly), "Lean PortableApps beacon is created");
+    portableAppsBeacon.close();
+    QFile portableAppsCombos(QDir(portableAppsRoot).absoluteFilePath("Data/settings/comboList.json"));
+    expect(portableAppsCombos.open(QIODevice::WriteOnly) &&
+        portableAppsCombos.write("{\"fileFormatVersion\":3,\"groups\":[],\"combos\":[]}") > 0,
+        "Lean PortableApps combo library is created");
+    portableAppsCombos.close();
+    portableProduct = migration::EPortableProduct::UpstreamBeeftext;
+    expect(migration::isStrongPortableCandidate(portableAppsExecutableFolder, &comboPath, &cleanupRoot, &portableProduct)
+        && portableProduct == migration::EPortableProduct::LeanBeeftext
+        && QDir::cleanPath(cleanupRoot) == QDir::cleanPath(portableAppsRoot),
+        "the existing PortableApps beacon and Data/settings layout recognizes portable Lean Beeftext");
 
     expect(migration::isBroadCleanupRoot(QString(), { root.absolutePath() })
 		&& migration::isBroadCleanupRoot(root.absolutePath(), { root.absolutePath() })
@@ -773,6 +834,31 @@ void testInstalledStorageAndMigrationSafety() {
         && migrationSource.indexOf("settings.setValue(kMigrationStateKey, int(migration::EState::ImportCompleted))")
             < migrationSource.indexOf("finishPendingCleanup(settings, false)"),
         "the runtime persists successful import state before cleanup so retries cannot re-import");
+    qsizetype const shallowStart = migrationSource.indexOf("QStringList const shallowRoots");
+    qsizetype const shallowEnd = migrationSource.indexOf("for (qsizetype i = sources.size()", shallowStart);
+    QString const shallowDiscovery = migrationSource.mid(shallowStart, shallowEnd - shallowStart);
+    expect(shallowStart >= 0 && shallowEnd > shallowStart
+        && shallowDiscovery.contains("QStandardPaths::DesktopLocation")
+        && shallowDiscovery.contains("QStandardPaths::DownloadLocation")
+        && shallowDiscovery.contains("directory.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot)")
+        && !shallowDiscovery.contains("QDirIterator")
+        && !shallowDiscovery.contains("Subdirectories"),
+        "Desktop and Downloads discovery checks each root and its immediate children without recursive searching");
+    expect(migrationSource.contains("Portable Beeftext")
+        && migrationSource.contains("Portable Lean Beeftext")
+        && migrationSource.contains("Remove the portable Lean Beeftext copy after import succeeds (Recommended)")
+        && migrationSource.contains("Remove the detected portable copies after import succeeds (Recommended)"),
+        "migration UI distinguishes upstream and Lean portable sources and uses accurate cleanup wording");
+    expect(migrationSource.contains("product != source.portableProduct")
+        && migrationSource.contains("fileDigest(source.comboFilePath) != source.comboDigest")
+        && migrationSource.contains("product == migration::EPortableProduct::LeanBeeftext ||")
+        && migrationSource.contains("FOF_ALLOWUNDO")
+        && migrationSource.contains("return recyclePaths(recycle)")
+        && migrationSource.contains("samePath(shortcutTarget(shortcut), source.executablePath)")
+        && migrationSource.contains("object[\"portableProduct\"]")
+        && !migrationSource.contains("portableModeSettingsFilePath")
+        && !migrationSource.contains("Settings.ini"),
+        "portable cleanup revalidates product/content and uses the Recycle Bin while portable settings are not imported");
     expect(migrationSource.contains("QSettings legacySettings(\"beeftext.org\", \"Beeftext\")")
         && !preferencesSource.contains("QSettings>(constants::kOrganizationName, constants::kSettingsApplicationName)"),
         "upstream preferences are read only as migration clues and are not adopted as Lean preferences");
