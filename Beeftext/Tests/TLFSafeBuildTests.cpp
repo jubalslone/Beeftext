@@ -782,7 +782,8 @@ void testInstallerArchitecture() {
         && !installer.contains("LicenseFile=")
         && !installer.contains("Portable.bin"),
         "the single installer uses the boring elevated Program Files flow without portable state or a license page");
-    expect(installer.contains("ForceCloseApplications=no")
+	expect(installer.contains("CloseApplications=yes")
+		&& !installer.contains("CloseApplications=force")
         && installer.contains("RestartApplications=no")
         && installer.contains("CompareVersions")
         && installer.contains("newer version of Lean Beeftext")

@@ -29,7 +29,6 @@ SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
 CloseApplicationsFilter={#MyAppExeName}
-ForceCloseApplications=no
 RestartApplications=no
 RestartIfNeededByRun=no
 ChangesAssociations=no
