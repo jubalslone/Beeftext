@@ -123,6 +123,20 @@ QString parametersFromCommand(QString const &command) {
 }
 
 
+QString safeRegisteredUninstallCommand(LegacySource const &source) {
+	QStringList const commands = source.quietUninstallCommand.isEmpty()
+		? QStringList { source.uninstallCommand }
+		: QStringList { source.quietUninstallCommand, source.uninstallCommand };
+	for (QString const &command: commands) {
+		QString const executable = executableFromCommand(command);
+		if (migration::installedMetadataIsConsistent(source.displayName, source.publisher,
+			source.rootPath, command, source.executablePath) && QFileInfo(executable).isFile())
+			return command;
+	}
+	return QString();
+}
+
+
 QList<LegacySource> registeredInstalledSources() {
     QList<LegacySource> result;
     QString const configuredCombo = legacyConfiguredComboFilePath();
@@ -157,10 +171,10 @@ QList<LegacySource> registeredInstalledSources() {
                     source.rootPath = QFileInfo(exe).absolutePath();
                 source.executablePath = exe;
                 source.comboFilePath = configuredCombo;
-                source.cleanupSafe = migration::installedMetadataIsConsistent(source.displayName, source.publisher,
-                    source.rootPath, source.uninstallCommand, source.executablePath) &&
-                    QFileInfo(source.executablePath).isFile() && QFileInfo(executableFromCommand(source.uninstallCommand)).isFile();
-                if (source.cleanupSafe && QFileInfo(source.comboFilePath).isFile()) {
+				bool const recognizable = migration::isRecognizableInstalledCandidate(source.displayName,
+					source.publisher, source.rootPath, source.executablePath) && QFileInfo(source.executablePath).isFile();
+				source.cleanupSafe = recognizable && !safeRegisteredUninstallCommand(source).isEmpty();
+                if (recognizable && QFileInfo(source.comboFilePath).isFile()) {
                     source.comboDigest = fileDigest(source.comboFilePath);
                     source.modified = QFileInfo(source.comboFilePath).lastModified();
                     if (!source.comboDigest.isEmpty())
@@ -248,7 +262,9 @@ QMap<QString, QStringList> beeftextShortcutTargets() {
 
 
 bool invokeUninstaller(LegacySource const &source) {
-    QString const command = source.quietUninstallCommand.isEmpty() ? source.uninstallCommand : source.quietUninstallCommand;
+	QString const command = safeRegisteredUninstallCommand(source);
+	if (command.isEmpty())
+		return false;
     QStringList parts = QProcess::splitCommand(command);
     if (parts.isEmpty())
         return false;
@@ -468,8 +484,7 @@ bool cleanupSource(LegacySource const &source) {
         return false;
 #ifdef _WIN32
     if (source.type == migration::ESourceType::Installed) {
-        if (!migration::installedMetadataIsConsistent(source.displayName, source.publisher, source.rootPath,
-            source.uninstallCommand, source.executablePath))
+		if (safeRegisteredUninstallCommand(source).isEmpty())
             return false;
         return invokeUninstaller(source);
     }

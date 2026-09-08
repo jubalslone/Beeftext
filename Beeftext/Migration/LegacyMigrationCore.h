@@ -38,6 +38,8 @@ struct ValidationResult {
 bool isStrongPortableCandidate(QString const &executableFolder, QString *outComboFilePath = nullptr,
     QString *outDedicatedRootPath = nullptr); ///< Require a beacon, expected data layout, executable, and readable combo data.
 bool isBroadCleanupRoot(QString const &candidateRoot, QStringList const &protectedRoots); ///< Refuse shared/general-purpose roots.
+bool isRecognizableInstalledCandidate(QString const &displayName, QString const &publisher,
+	QString const &installLocation, QString const &executablePath); ///< Identify upstream without granting cleanup permission.
 bool installedMetadataIsConsistent(QString const &displayName, QString const &publisher, QString const &installLocation,
     QString const &uninstallCommand, QString const &executablePath); ///< Validate registered upstream uninstall metadata.
 QList<QList<qsizetype>> groupSourcesByContent(QList<QByteArray> const &digests); ///< Group byte-identical source libraries.

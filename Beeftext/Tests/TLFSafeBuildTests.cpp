@@ -722,14 +722,23 @@ void testInstalledStorageAndMigrationSafety() {
     expect(!migration::isStrongPortableCandidate(portable),
         "an arbitrary Beeftext.exe plus data is rejected without a portable beacon");
 
-    expect(migration::isBroadCleanupRoot(root.absolutePath(), { root.absolutePath() })
+    expect(migration::isBroadCleanupRoot(QString(), { root.absolutePath() })
+		&& migration::isBroadCleanupRoot(root.absolutePath(), { root.absolutePath() })
         && !migration::isBroadCleanupRoot(portable, { root.absolutePath() }),
         "broad protected roots are refused while a dedicated child folder is eligible");
-    expect(migration::installedMetadataIsConsistent("Beeftext", "Xavier Michelon", portable,
-        QDir(portable).absoluteFilePath("uninstall.exe"), QDir(portable).absoluteFilePath("Beeftext.exe"))
+    QString const registeredUninstaller = QString("\"%1\"").arg(QDir(portable).absoluteFilePath("uninstall.exe"));
+	QString const outsideUninstaller = QString("\"%1\"").arg(root.absoluteFilePath("outside-uninstall.exe"));
+	expect(migration::isRecognizableInstalledCandidate("Beeftext", "Xavier Michelon", portable,
+		QDir(portable).absoluteFilePath("Beeftext.exe"))
+		&& !migration::isRecognizableInstalledCandidate("Lean Beeftext", "Jubal Slone", portable,
+			QDir(portable).absoluteFilePath("Beeftext.exe"))
+		&& migration::installedMetadataIsConsistent("Beeftext", "Xavier Michelon", portable,
+		registeredUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe"))
         && !migration::installedMetadataIsConsistent("Lean Beeftext", "Jubal Slone", portable,
-            QDir(portable).absoluteFilePath("uninstall.exe"), QDir(portable).absoluteFilePath("Beeftext.exe")),
-        "installed cleanup metadata accepts upstream identity and rejects Lean identity");
+			registeredUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe"))
+		&& !migration::installedMetadataIsConsistent("Beeftext", "Xavier Michelon", portable,
+			outsideUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe")),
+        "installed detection accepts upstream identity while cleanup also requires a matching uninstaller path");
 
     QList<QList<qsizetype>> const groups = migration::groupSourcesByContent({ "same", "different", "same" });
     expect(groups.size() == 2 && groups[0] == QList<qsizetype>({ 0, 2 }) && groups[1] == QList<qsizetype>({ 1 }),
@@ -746,6 +755,7 @@ void testInstalledStorageAndMigrationSafety() {
         "migration is installed-only, first-run, non-overwriting, and idempotent");
     expect(migrationSource.contains("migrateSource(selected, validation, error)")
         && migrationSource.contains("cleanupAllowed(validation)")
+		&& migrationSource.contains("safeRegisteredUninstallCommand(source)")
         && migrationSource.contains("ImportCompleted")
         && migrationSource.indexOf("settings.setValue(kMigrationStateKey, int(migration::EState::ImportCompleted))")
             < migrationSource.indexOf("finishPendingCleanup(settings, false)"),

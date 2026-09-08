@@ -17,6 +17,8 @@ namespace {
 
 
 QString normalizedPath(QString const &path) {
+	if (path.trimmed().isEmpty())
+		return QString();
     QFileInfo const info(path);
     QString result = info.canonicalFilePath();
     if (result.isEmpty())
@@ -77,8 +79,8 @@ bool isBroadCleanupRoot(QString const &candidateRoot, QStringList const &protect
 }
 
 
-bool installedMetadataIsConsistent(QString const &displayName, QString const &publisher,
-    QString const &installLocation, QString const &uninstallCommand, QString const &executablePath) {
+bool isRecognizableInstalledCandidate(QString const &displayName, QString const &publisher,
+	QString const &installLocation, QString const &executablePath) {
     QString const foldedName = displayName.toCaseFolded();
     if (!foldedName.contains("beeftext") || foldedName.contains("lean beeftext"))
         return false;
@@ -88,15 +90,27 @@ bool installedMetadataIsConsistent(QString const &displayName, QString const &pu
 
     QString const root = normalizedPath(installLocation);
     QString const executable = normalizedPath(executablePath);
-    QString const uninstaller = normalizedPath(executableFromCommand(uninstallCommand));
-    if (root.isEmpty() || executable.isEmpty() || uninstaller.isEmpty())
+	if (root.isEmpty() || executable.isEmpty())
         return false;
     QString const prefix = root.endsWith('/') ? root : root + '/';
-    if (!executable.startsWith(prefix) || !uninstaller.startsWith(prefix))
+	return executable.startsWith(prefix) &&
+		QFileInfo(executablePath).fileName().compare("Beeftext.exe", Qt::CaseInsensitive) == 0;
+}
+
+
+bool installedMetadataIsConsistent(QString const &displayName, QString const &publisher,
+    QString const &installLocation, QString const &uninstallCommand, QString const &executablePath) {
+	if (!isRecognizableInstalledCandidate(displayName, publisher, installLocation, executablePath))
+		return false;
+	QString const root = normalizedPath(installLocation);
+	QString const uninstaller = normalizedPath(executableFromCommand(uninstallCommand));
+	if (uninstaller.isEmpty())
+		return false;
+	QString const prefix = root.endsWith('/') ? root : root + '/';
+	if (!uninstaller.startsWith(prefix))
         return false;
     QString const uninstallName = QFileInfo(uninstaller).fileName().toCaseFolded();
-    return QFileInfo(executablePath).fileName().compare("Beeftext.exe", Qt::CaseInsensitive) == 0 &&
-        (uninstallName.startsWith("unins") || uninstallName.contains("uninstall"));
+	return uninstallName.startsWith("unins") || uninstallName.contains("uninstall");
 }
 
 
