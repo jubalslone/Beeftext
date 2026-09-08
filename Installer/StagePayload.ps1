@@ -111,14 +111,16 @@ $qtVersion = (& qmake -query QT_VERSION).Trim()
 ) | Set-Content -LiteralPath (Join-Path $Destination 'BUILD_INFO.txt') -Encoding utf8
 
 $checksumPath = Join-Path $Destination 'SHA256SUMS.txt'
-Get-ChildItem -Path $Destination -Recurse -File |
-	Where-Object { $_.FullName -ne $checksumPath } |
+$checksumFullPath = [IO.Path]::GetFullPath($checksumPath)
+$manifestLines = @(Get-ChildItem -Path $Destination -Recurse -File |
+	Where-Object { $_.FullName -ne $checksumFullPath } |
 	Sort-Object FullName |
 	ForEach-Object {
 		$relativePath = [IO.Path]::GetRelativePath($Destination, $_.FullName).Replace('\', '/')
 		$hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 		"$hash  $relativePath"
-	} | Set-Content -LiteralPath $checksumPath -Encoding ascii
+	})
+$manifestLines | Set-Content -LiteralPath $checksumPath -Encoding ascii
 
 if ($Mode -eq 'Installed') {
 	foreach ($beacon in @('Portable.bin', 'PortableApps.bin')) {

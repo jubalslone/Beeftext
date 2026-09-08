@@ -790,6 +790,7 @@ void testInstallerArchitecture() {
         "installer upgrades permit same-version reinstall, refuse downgrade, avoid force-closing, and document unattended use");
     expect(staging.contains("ValidateSet('Installed', 'Portable')")
         && staging.contains("Installed payload must not contain $beacon")
+		&& staging.contains("$checksumFullPath = [IO.Path]::GetFullPath($checksumPath)")
         && staging.contains("SHA256SUMS.txt")
         && staging.contains("BUILD_INFO.txt"),
         "one staging script builds isolated installed and portable payloads with provenance manifests");
@@ -800,6 +801,7 @@ void testInstallerArchitecture() {
         && workflow.contains("0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f")
         && workflow.contains("-Mode Installed")
         && workflow.contains("-Mode Portable")
+		&& workflow.contains("$checksumFullPath = [IO.Path]::GetFullPath($checksumPath)")
         && workflow.contains("Same-version reinstall")
         && workflow.contains("Documents user-data fixture was deleted by uninstall")
         && workflow.contains("Lean-Beeftext-Setup-1.0.0.exe"),
