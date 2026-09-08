@@ -538,8 +538,9 @@ void testProductFinishingSurface() {
 		"public metadata is 1.0.0 while the disabled updater keeps its two-part upstream compatibility value");
     expect(constantsSource.contains("kSettingsApplicationName = \"Lean Beeftext\"")
         && constantsSource.contains("kOrganizationName = \"Jubal Slone\"")
-        && constantsHeader.contains("kSettingsApplicationName"),
-        "installed settings and AppLocalData use permanent Lean identities");
+        && constantsHeader.contains("kSettingsApplicationName")
+        && readRepositoryFile("Installer/LeanBeeftext.iss").contains("#define MyAppPublisher \"Jubal Slone\""),
+        "installed settings identity and public publisher attribution retain their permanent Lean values");
 	expect(constantsSource.contains("https://github.com/jubalslone/Beeftext#variables"),
 		"About Variables uses the README Variables anchor");
 
@@ -672,16 +673,26 @@ void testInstalledStorageAndMigrationSafety() {
     QString const preferencesSource = readSourceFile("Preferences/PreferencesManager.cpp");
     QString const autoStartSource = readSourceFile("AutoStart.cpp");
     QString const migrationSource = readSourceFile("Migration/LegacyMigrationManager.cpp");
+    QString const comboLastUseSource = readSourceFile("LastUse/ComboLastUseFile.cpp");
+    QString const emojiLastUseSource = readSourceFile("LastUse/EmojiLastUseFile.cpp");
     expect(globalsSource.contains("QStandardPaths::DocumentsLocation")
         && globalsSource.contains("Lean Beeftext")
         && globalsSource.contains("installedSettingsFilePath")
         && preferencesSource.contains("globals::installedSettingsFilePath(), QSettings::IniFormat"),
         "installed restorable data and explicit INI settings are rooted under the Documents known folder");
-    expect(globalsSource.contains("QStandardPaths::AppLocalDataLocation")
+    expect(globalsSource.contains("SHGetKnownFolderPath(FOLDERID_LocalAppData")
+        && globalsSource.contains("CoTaskMemFree(knownFolderPath)")
+        && globalsSource.contains("QDir(localAppData).absoluteFilePath(\"Lean Beeftext\")")
+        && !globalsSource.contains("QStandardPaths::AppLocalDataLocation")
+        && !globalsSource.contains("Jubal Slone")
+        && !globalsSource.contains("QDir(localAppData).absoluteFilePath(constants::kOrganizationName)")
         && globalsSource.contains("machineLocalDataDir")
-        && readSourceFile("LastUse/ComboLastUseFile.cpp").contains("machineLocalDataDir")
-        && readSourceFile("LastUse/EmojiLastUseFile.cpp").contains("machineLocalDataDir"),
-        "logs and last-use caches use Lean machine-local storage");
+        && globalsSource.contains("QDir(machineLocalDataDir()).absoluteFilePath(\"log.txt\")")
+        && comboLastUseSource.contains("QDir(globals::machineLocalDataDir()).absoluteFilePath(kComboLastUseFileName)")
+        && comboLastUseSource.contains("kComboLastUseFileName = \"comboLastUse.json\"")
+        && emojiLastUseSource.contains("QDir(globals::machineLocalDataDir()).absoluteFilePath(kEmojiLastUseFileName)")
+        && emojiLastUseSource.contains("kEmojiLastUseFileName = \"emojiLastUse.json\""),
+        "installed logs and last-use caches use LocalAppData/Lean Beeftext without a publisher directory");
     expect(autoStartSource.contains("QCoreApplication::applicationFilePath()")
         && !autoStartSource.contains("kKeyAppExePath")
         && migrationSource.contains("AppExePath"),
@@ -691,6 +702,8 @@ void testInstalledStorageAndMigrationSafety() {
         "live combo writes use atomic replacement");
     expect(preferencesSource.contains("globals::portableModeSettingsFilePath(), QSettings::IniFormat")
         && globalsSource.contains("appDir.absoluteFilePath(\"Data\")")
+        && globalsSource.contains("if (isInPortableMode())")
+        && globalsSource.contains("return portableModeDataFolderPath();")
         && globalsSource.contains("isInPortableMode() ? \"Backup\" : \"Backups\""),
         "portable Settings.ini, Data, and Data/Backup behavior remains unchanged");
 

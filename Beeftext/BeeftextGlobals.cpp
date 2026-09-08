@@ -13,12 +13,36 @@
 #include "BeeftextConstants.h"
 #include "Preferences/PreferencesManager.h"
 #include <XMiLib/Exception.h>
+#ifdef Q_OS_WIN
+#include <ShlObj.h>
+#endif
 
 
 namespace globals {
 
 
 namespace {
+
+
+//****************************************************************************************************************************************************
+/// \return The Windows LocalAppData known-folder path without Qt's organization/application suffix.
+//****************************************************************************************************************************************************
+QString localAppDataRootPath() {
+#ifdef Q_OS_WIN
+    HRESULT const initResult = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    if (FAILED(initResult) && initResult != RPC_E_CHANGED_MODE)
+        return QString();
+    PWSTR knownFolderPath = nullptr;
+    HRESULT const result = SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_DEFAULT, nullptr, &knownFolderPath);
+    QString const path = SUCCEEDED(result) && knownFolderPath ? QString::fromWCharArray(knownFolderPath) : QString();
+    CoTaskMemFree(knownFolderPath);
+    if (SUCCEEDED(initResult))
+        CoUninitialize();
+    return path;
+#else
+    return QString();
+#endif
+}
 
 
 //****************************************************************************************************************************************************
@@ -247,8 +271,10 @@ QString appDataDir() {
 /// \return The location of volatile, machine-local application data.
 //****************************************************************************************************************************************************
 QString machineLocalDataDir() {
-    return isInPortableMode() ? portableModeDataFolderPath() :
-        QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    if (isInPortableMode())
+        return portableModeDataFolderPath();
+    QString const localAppData = localAppDataRootPath();
+    return localAppData.isEmpty() ? QString() : QDir(localAppData).absoluteFilePath("Lean Beeftext");
 }
 
 

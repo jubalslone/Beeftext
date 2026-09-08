@@ -33,13 +33,15 @@ Meaningful, restorable user data is stored beneath the Windows Documents known f
 
 `QStandardPaths::DocumentsLocation` resolves the known folder. If Windows/OneDrive Known Folder Move redirects Documents, Lean Beeftext naturally uses the redirected location; Lean Beeftext does not configure OneDrive.
 
-Machine-local diagnostic and recency data is stored under the Lean-specific Qt `AppLocalDataLocation`, normally equivalent to:
+Machine-local diagnostic and recency data is stored beneath the Windows LocalAppData known folder:
 
 ```text
-%LOCALAPPDATA%\Jubal Slone\Lean Beeftext\log.txt
-%LOCALAPPDATA%\Jubal Slone\Lean Beeftext\comboLastUse.json
-%LOCALAPPDATA%\Jubal Slone\Lean Beeftext\emojiLastUse.json
+%LOCALAPPDATA%\Lean Beeftext\log.txt
+%LOCALAPPDATA%\Lean Beeftext\comboLastUse.json
+%LOCALAPPDATA%\Lean Beeftext\emojiLastUse.json
 ```
+
+The publisher name is intentionally not part of this filesystem path. Lean Beeftext resolves the Windows `FOLDERID_LocalAppData` known folder and appends exactly `Lean Beeftext`.
 
 Uninstall removes the Program Files payload, shortcuts, and uninstall registration. It intentionally does not delete `<Documents>\Lean Beeftext`, so reinstalling does not lose combos, settings, or migration recovery copies.
 
