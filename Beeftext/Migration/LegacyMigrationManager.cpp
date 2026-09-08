@@ -593,6 +593,8 @@ MigrationChoice showMigrationDialog(QList<LegacySource> const &sources, QList<QL
         for (qsizetype const index: contentGroups[group]) {
             LegacySource const &source = sources[index];
             lines.append(QString("%1: %2").arg(sourceTypeName(source), QDir::toNativeSeparators(source.rootPath)));
+			if (source.type == migration::ESourceType::Installed && !source.cleanupSafe)
+				lines.append(QObject::tr("Lean Beeftext can import this library, but will not remove the old installation because its registered uninstaller could not be verified."));
             if (source.type == migration::ESourceType::Portable && !source.cleanupSafe)
                 lines.append(QObject::tr("This portable copy is in a shared folder, so Lean Beeftext will not remove it automatically."));
             installed |= source.type == migration::ESourceType::Installed && source.cleanupSafe;
