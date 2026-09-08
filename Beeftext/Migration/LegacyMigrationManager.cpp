@@ -353,8 +353,7 @@ void addPortableCandidate(QList<LegacySource> &sources, QString const &executabl
     source.comboDigest = fileDigest(comboPath);
     source.modified = QFileInfo(comboPath).lastModified();
     source.cleanupSafe = !migration::isBroadCleanupRoot(rootPath, protectedCleanupRoots()) &&
-        (product == migration::EPortableProduct::LeanBeeftext ||
-            QFileInfo(rootPath).fileName().contains("beeftext", Qt::CaseInsensitive));
+        QFileInfo(rootPath).fileName().contains("beeftext", Qt::CaseInsensitive);
     if (!source.comboDigest.isEmpty())
         sources.append(source);
 }
@@ -508,8 +507,7 @@ bool cleanupSource(LegacySource const &source) {
     if (!migration::isStrongPortableCandidate(QFileInfo(source.executablePath).absolutePath(), &comboPath, &rootPath, &product) ||
         product != source.portableProduct || !samePath(rootPath, source.rootPath) ||
         migration::isBroadCleanupRoot(rootPath, protectedCleanupRoots()) ||
-        (product == migration::EPortableProduct::UpstreamBeeftext &&
-            !QFileInfo(rootPath).fileName().contains("beeftext", Qt::CaseInsensitive)))
+        !QFileInfo(rootPath).fileName().contains("beeftext", Qt::CaseInsensitive))
         return false;
     QStringList recycle = { rootPath };
     for (QString const &shortcut: source.shortcutPaths) {
@@ -615,7 +613,7 @@ MigrationChoice showMigrationDialog(QList<LegacySource> const &sources, QList<QL
 			if (source.type == migration::ESourceType::Installed && !source.cleanupSafe)
 				lines.append(QObject::tr("Lean Beeftext can import this library, but will not remove the old installation because its registered uninstaller could not be verified."));
             if (source.type == migration::ESourceType::Portable && !source.cleanupSafe)
-                lines.append(QObject::tr("This portable copy is in a shared folder, so Lean Beeftext will not remove it automatically."));
+                lines.append(QObject::tr("This portable copy is in a shared or ambiguous folder, so Lean Beeftext will not remove it automatically."));
             installed |= source.type == migration::ESourceType::Installed && source.cleanupSafe;
             portable |= source.type == migration::ESourceType::Portable && source.cleanupSafe;
             if (source.type == migration::ESourceType::Portable) {

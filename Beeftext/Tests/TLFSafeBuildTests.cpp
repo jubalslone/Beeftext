@@ -851,7 +851,7 @@ void testInstalledStorageAndMigrationSafety() {
         "migration UI distinguishes upstream and Lean portable sources and uses accurate cleanup wording");
     expect(migrationSource.contains("product != source.portableProduct")
         && migrationSource.contains("fileDigest(source.comboFilePath) != source.comboDigest")
-        && migrationSource.contains("product == migration::EPortableProduct::LeanBeeftext ||")
+        && migrationSource.contains("QFileInfo(rootPath).fileName().contains(\"beeftext\", Qt::CaseInsensitive)")
         && migrationSource.contains("FOF_ALLOWUNDO")
         && migrationSource.contains("return recyclePaths(recycle)")
         && migrationSource.contains("samePath(shortcutTarget(shortcut), source.executablePath)")
