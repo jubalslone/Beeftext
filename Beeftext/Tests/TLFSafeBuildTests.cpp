@@ -837,6 +837,32 @@ void testInstalledStorageAndMigrationSafety() {
 		&& !migration::installedMetadataIsConsistent("Beeftext", "Xavier Michelon", portable,
 			outsideUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe")),
         "installed detection accepts upstream identity while cleanup also requires a matching uninstaller path");
+	QString const nsisUninstaller = QString("\"%1\" /S").arg(QDir(portable).absoluteFilePath("Uninstall.exe"));
+	QString nsisParameters;
+	expect(migration::buildVerifiedUpstreamNsisUninstallParameters("Beeftext", "beeftext.org", portable,
+		nsisUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe"), &nsisParameters)
+		&& nsisParameters == QString("/S _?=%1").arg(QDir::toNativeSeparators(QDir::cleanPath(portable)))
+		&& nsisParameters.endsWith(QDir::toNativeSeparators(QDir::cleanPath(portable)))
+		&& !migration::buildVerifiedUpstreamNsisUninstallParameters("Beeftext", "beeftext.org", portable,
+			QString("\"%1\" /S").arg(QDir(portable).absoluteFilePath("unins000.exe")),
+			QDir(portable).absoluteFilePath("Beeftext.exe"), &nsisParameters)
+		&& !migration::buildVerifiedUpstreamNsisUninstallParameters("Unrelated Tool", "Unknown", portable,
+			nsisUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe"), &nsisParameters)
+		&& !migration::buildVerifiedUpstreamNsisUninstallParameters("Beeftext", "beeftext.org", portable,
+			nsisUninstaller + " _?=" + root.absolutePath(), QDir(portable).absoluteFilePath("Beeftext.exe"),
+			&nsisParameters),
+		"verified upstream NSIS invocation preserves arguments, appends the exact unquoted spaced root last, and rejects arbitrary or pre-overridden uninstallers");
+
+	QByteArray const preCloseContents("digest A");
+	QByteArray const postCloseContents("digest B");
+	QByteArray const changedAgainContents("digest C");
+	QByteArray const preCloseDigest = migration::sourceContentDigest(preCloseContents);
+	QByteArray const refreshedDigest = migration::sourceContentDigest(postCloseContents);
+	expect(preCloseDigest != refreshedDigest
+		&& migration::sourceContentMatchesDigest(postCloseContents, refreshedDigest)
+		&& !migration::sourceContentMatchesDigest(postCloseContents, preCloseDigest)
+		&& !migration::sourceContentMatchesDigest(changedAgainContents, refreshedDigest),
+		"a post-close digest refresh accepts the exact imported bytes and refuses a later source change");
 
     QList<QList<qsizetype>> const groups = migration::groupSourcesByContent({ "same", "different", "same" });
     expect(groups.size() == 2 && groups[0] == QList<qsizetype>({ 0, 2 }) && groups[1] == QList<qsizetype>({ 1 }),
@@ -858,7 +884,7 @@ void testInstalledStorageAndMigrationSafety() {
         "migration is installed-only, first-run, non-overwriting, and idempotent");
     expect(migrationSource.contains("migrateSource(selected, validation, error)")
         && migrationSource.contains("cleanupAllowed(validation)")
-		&& migrationSource.contains("safeRegisteredUninstallCommand(registeredSource)")
+		&& migrationSource.contains("safeRegisteredUninstallCommand(registeredSource, &commandStatus)")
 		&& migrationSource.contains("waitForInstalledCleanupPostconditions(registeredSource)")
 		&& migrationSource.contains("uninstallRegistrationExists(registeredSource)")
 		&& !migrationSource.contains("GetExitCodeProcess")
@@ -866,12 +892,43 @@ void testInstalledStorageAndMigrationSafety() {
         && migrationSource.indexOf("settings.setValue(kMigrationStateKey, int(migration::EState::ImportCompleted))")
             < migrationSource.indexOf("finishPendingCleanup(settings, false)"),
         "the runtime persists successful import state before cleanup so retries cannot re-import");
+	expect(migrationSource.contains("refreshSourceBeforeImport(sources[index], refreshed, refreshError)")
+		&& migrationSource.indexOf("refreshSourceBeforeImport(sources[index], refreshed, refreshError)")
+			< migrationSource.indexOf("migrateSource(selected, validation, error)")
+		&& migrationSource.contains("readSourceContentsMatchingDigest(source, sourceContents, outError)")
+		&& migrationSource.contains("writeRecoverySnapshot(source, sourceContents, snapshotFolder, outError)")
+		&& migrationSource.contains("QJsonDocument::fromJson(sourceContents")
+		&& migrationSource.contains("source.comboDigest != selected.comboDigest")
+		&& migrationSource.contains("source combo digest changed before cleanup"),
+		"selected sources refresh after graceful close and one digest-bound byte sequence drives snapshot, parse, import, and cleanup");
+	expect(migrationSource.contains("buildVerifiedUpstreamNsisUninstallParameters")
+		&& migrationSource.contains("ShellExecuteExW(&info)")
+		&& migrationSource.contains("WaitForSingleObject(info.hProcess, INFINITE)")
+		&& !migrationSource.contains("cmd.exe")
+		&& !migrationSource.contains("powershell", Qt::CaseInsensitive),
+		"verified NSIS cleanup uses direct process launch and real-process wait semantics without a shell");
 	expect(migrationSource.contains("uninstallRegistryHive")
 		&& migrationSource.contains("uninstallRegistrySubkey")
 		&& migrationSource.contains("uninstallRegistryView")
 		&& migrationSource.contains("Unknown registration identity fails closed")
 		&& migrationSource.contains("remaining.append(value)"),
 		"installed cleanup records the exact uninstall entry and keeps failed postcondition checks pending");
+	expect(migrationSource.contains("cleanup was not selected")
+		&& migrationSource.contains("cleanupSafe is false")
+		&& migrationSource.contains("registered uninstall source could not be refreshed and revalidated")
+		&& migrationSource.contains("registered uninstall command could not be verified")
+		&& migrationSource.contains("registered uninstaller executable is missing")
+		&& migrationSource.contains("could not be launched")
+		&& migrationSource.contains("waiting for the registered uninstaller process failed")
+		&& migrationSource.contains("recorded upstream executable still exists after the cleanup timeout")
+		&& migrationSource.contains("recorded uninstall registry entry still exists after the cleanup timeout")
+		&& migrationSource.contains("cleanup succeeded")
+		&& migrationSource.contains("cleanup remains pending")
+		&& !migrationSource.contains("addInfo(sourceContents")
+		&& !migrationSource.contains("addWarning(sourceContents")
+		&& !migrationSource.contains(".arg(sourceContents)")
+		&& !migrationSource.contains(".arg(contents)"),
+		"local diagnostics distinguish cleanup decisions and failures without logging combo contents");
 	expect(migrationSource.contains("Beeftext is currently running")
 		&& migrationSource.contains("Close Beeftext and continue")
 		&& migrationSource.contains("requestGracefulClose(source)")
@@ -910,7 +967,7 @@ void testInstalledStorageAndMigrationSafety() {
         && migrationSource.contains("Remove the detected portable copies after import succeeds (Recommended)"),
         "migration UI distinguishes upstream and Lean portable sources and uses accurate cleanup wording");
     expect(migrationSource.contains("product != source.portableProduct")
-        && migrationSource.contains("fileDigest(source.comboFilePath) != source.comboDigest")
+		&& migrationSource.contains("currentDigest != source.comboDigest")
         && migrationSource.contains("QFileInfo(rootPath).fileName().contains(\"beeftext\", Qt::CaseInsensitive)")
         && migrationSource.contains("FOF_ALLOWUNDO")
         && migrationSource.contains("return recyclePaths(recycle)")

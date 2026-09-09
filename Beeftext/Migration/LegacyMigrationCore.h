@@ -48,6 +48,11 @@ bool isRecognizableInstalledCandidate(QString const &displayName, QString const 
 	QString const &installLocation, QString const &executablePath); ///< Identify upstream without granting cleanup permission.
 bool installedMetadataIsConsistent(QString const &displayName, QString const &publisher, QString const &installLocation,
     QString const &uninstallCommand, QString const &executablePath); ///< Validate registered upstream uninstall metadata.
+bool buildVerifiedUpstreamNsisUninstallParameters(QString const &displayName, QString const &publisher,
+	QString const &installLocation, QString const &uninstallCommand, QString const &executablePath,
+	QString *outParameters); ///< Add NSIS wait semantics only for the verified upstream Uninstall.exe.
+QByteArray sourceContentDigest(QByteArray const &contents); ///< Compute the digest that binds source refresh, snapshot, import, and cleanup.
+bool sourceContentMatchesDigest(QByteArray const &contents, QByteArray const &digest); ///< Revalidate source bytes against their recorded digest.
 bool installedCleanupPostconditionsMet(bool executableExists, bool uninstallRegistrationExists); ///< Require both installed traces to be gone.
 QList<QList<qsizetype>> groupSourcesByContent(QList<QByteArray> const &digests); ///< Group byte-identical source libraries.
 bool cleanupAllowed(ValidationResult const &result); ///< Gate all cleanup on the full import validation sequence.

@@ -49,7 +49,22 @@ struct LegacySource {
 
 QByteArray fileDigest(QString const &path) {
     QFile file(path);
-    return file.open(QIODevice::ReadOnly) ? QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256) : QByteArray();
+	return file.open(QIODevice::ReadOnly) ? migration::sourceContentDigest(file.readAll()) : QByteArray();
+}
+
+
+QString digestPrefix(QByteArray const &digest) {
+	return QString::fromLatin1(digest.toHex().left(12));
+}
+
+
+void logMigrationInfo(QString const &message) {
+	globals::debugLog().addInfo("Beeftext migration: " + message);
+}
+
+
+void logMigrationWarning(QString const &message) {
+	globals::debugLog().addWarning("Beeftext migration: " + message);
 }
 
 
@@ -149,16 +164,34 @@ QString parametersFromCommand(QString const &command) {
 }
 
 
-QString safeRegisteredUninstallCommand(LegacySource const &source) {
+enum class ERegisteredUninstallCommandStatus {
+	Verified,
+	CouldNotBeVerified,
+	ExecutableMissing,
+};
+
+
+QString safeRegisteredUninstallCommand(LegacySource const &source,
+	ERegisteredUninstallCommandStatus *outStatus = nullptr) {
+	bool verifiedExecutableMissing = false;
 	QStringList const commands = source.quietUninstallCommand.isEmpty()
 		? QStringList { source.uninstallCommand }
 		: QStringList { source.quietUninstallCommand, source.uninstallCommand };
 	for (QString const &command: commands) {
 		QString const executable = executableFromCommand(command);
-		if (migration::installedMetadataIsConsistent(source.displayName, source.publisher,
-			source.rootPath, command, source.executablePath) && QFileInfo(executable).isFile())
+		if (!migration::installedMetadataIsConsistent(source.displayName, source.publisher,
+			source.rootPath, command, source.executablePath))
+			continue;
+		if (QFileInfo(executable).isFile()) {
+			if (outStatus)
+				*outStatus = ERegisteredUninstallCommandStatus::Verified;
 			return command;
+		}
+		verifiedExecutableMissing = true;
 	}
+	if (outStatus)
+		*outStatus = verifiedExecutableMissing ? ERegisteredUninstallCommandStatus::ExecutableMissing :
+			ERegisteredUninstallCommandStatus::CouldNotBeVerified;
 	return QString();
 }
 
@@ -324,14 +357,37 @@ QMap<QString, QStringList> portableShortcutTargets() {
 
 
 bool invokeUninstaller(LegacySource const &source) {
-	QString const command = safeRegisteredUninstallCommand(source);
-	if (command.isEmpty())
+	ERegisteredUninstallCommandStatus commandStatus;
+	QString const command = safeRegisteredUninstallCommand(source, &commandStatus);
+	if (command.isEmpty()) {
+		logMigrationWarning(commandStatus == ERegisteredUninstallCommandStatus::ExecutableMissing ?
+			"the verified registered uninstaller executable is missing." :
+			"the registered uninstall command could not be verified.");
 		return false;
+	}
     QStringList parts = QProcess::splitCommand(command);
-    if (parts.isEmpty())
+    if (parts.isEmpty()) {
+		logMigrationWarning("the registered uninstall command could not be parsed.");
         return false;
+	}
     QString const executable = parts.takeFirst();
-    QString const parameters = parametersFromCommand(command);
+	if (!QFileInfo(executable).isFile()) {
+		logMigrationWarning("the verified registered uninstaller executable is missing.");
+		return false;
+	}
+	QString parameters = parametersFromCommand(command);
+	if (QFileInfo(executable).fileName().compare("Uninstall.exe", Qt::CaseInsensitive) == 0) {
+		if (!migration::buildVerifiedUpstreamNsisUninstallParameters(source.displayName, source.publisher,
+			source.rootPath, command, source.executablePath, &parameters)) {
+			logMigrationWarning("the upstream NSIS uninstall command could not be verified.");
+			return false;
+		}
+		logMigrationInfo(QString("launching the verified upstream NSIS uninstaller for %1 with wait semantics.")
+			.arg(QDir::toNativeSeparators(source.rootPath)));
+	} else {
+		logMigrationInfo(QString("launching the verified registered uninstaller for %1.")
+			.arg(QDir::toNativeSeparators(source.rootPath)));
+	}
     SHELLEXECUTEINFOW info = {};
     info.cbSize = sizeof(info);
     info.fMask = SEE_MASK_NOCLOSEPROCESS;
@@ -339,12 +395,20 @@ bool invokeUninstaller(LegacySource const &source) {
     info.lpFile = reinterpret_cast<LPCWSTR>(executable.utf16());
     info.lpParameters = reinterpret_cast<LPCWSTR>(parameters.utf16());
     info.nShow = SW_SHOWNORMAL;
-    if (!ShellExecuteExW(&info) || !info.hProcess)
+    if (!ShellExecuteExW(&info) || !info.hProcess) {
+		logMigrationWarning(QString("the verified registered uninstaller could not be launched (Windows error %1).")
+			.arg(GetLastError()));
         return false;
+	}
     DWORD const waitResult = WaitForSingleObject(info.hProcess, INFINITE);
     CloseHandle(info.hProcess);
+	if (waitResult != WAIT_OBJECT_0) {
+		logMigrationWarning(QString("waiting for the registered uninstaller process failed (Windows result %1).")
+			.arg(waitResult));
+		return false;
+	}
     // An upstream uninstaller's exit code is not proof that it actually removed the application.
-    return waitResult == WAIT_OBJECT_0;
+	return true;
 }
 
 
@@ -393,7 +457,8 @@ bool loadRegisteredUninstallSource(RegistryView const &view, QString const &subk
         result.publisher.compare(recorded.publisher, Qt::CaseInsensitive) != 0)
         return false;
     result.cleanupSafe = !safeRegisteredUninstallCommand(result).isEmpty();
-    return result.cleanupSafe;
+	return migration::isRecognizableInstalledCandidate(result.displayName, result.publisher,
+		result.rootPath, result.executablePath);
 }
 
 
@@ -437,11 +502,21 @@ bool refreshRegisteredUninstallSource(LegacySource const &recorded, LegacySource
 bool waitForInstalledCleanupPostconditions(LegacySource const &source) {
     DWORD elapsed = 0;
     while (true) {
-        if (migration::installedCleanupPostconditionsMet(QFileInfo(source.executablePath).exists(),
-            uninstallRegistrationExists(source)))
+		bool const executableExists = QFileInfo(source.executablePath).exists();
+		bool const registrationExists = uninstallRegistrationExists(source);
+		if (migration::installedCleanupPostconditionsMet(executableExists, registrationExists)) {
+			logMigrationInfo("cleanup succeeded; the recorded executable and uninstall registration are both gone.");
             return true;
-        if (elapsed >= kPostUninstallWaitMs)
+		}
+		if (elapsed >= kPostUninstallWaitMs) {
+			if (executableExists)
+				logMigrationWarning(QString("the recorded upstream executable still exists after the cleanup timeout: %1")
+					.arg(QDir::toNativeSeparators(source.executablePath)));
+			if (registrationExists)
+				logMigrationWarning(QString("the recorded uninstall registry entry still exists after the cleanup timeout: %1\\%2")
+					.arg(source.uninstallRegistryHive, source.uninstallRegistrySubkey));
             return false;
+		}
         Sleep(250);
         elapsed += 250;
     }
@@ -530,6 +605,86 @@ bool recyclePaths(QStringList const &paths) {
 
 
 #endif // _WIN32
+
+
+QStringList protectedCleanupRoots();
+
+
+bool readSourceContentsMatchingDigest(LegacySource const &source, QByteArray &outContents, QString &outError) {
+	QFile file(source.comboFilePath);
+	if (!file.open(QIODevice::ReadOnly)) {
+		outError = QObject::tr("The original combo library could not be read.");
+		return false;
+	}
+	outContents = file.readAll();
+	QByteArray const actualDigest = migration::sourceContentDigest(outContents);
+	if (!migration::sourceContentMatchesDigest(outContents, source.comboDigest)) {
+		logMigrationWarning(QString("source combo digest changed after validation (expected %1, found %2); refusing import or cleanup.")
+			.arg(digestPrefix(source.comboDigest), digestPrefix(actualDigest)));
+		outError = QObject::tr("The original combo library changed after it was validated. Nothing was imported or removed.");
+		return false;
+	}
+	return true;
+}
+
+
+bool refreshSourceBeforeImport(LegacySource const &recorded, LegacySource &refreshed, QString &outError) {
+	refreshed = recorded;
+	if (recorded.type == migration::ESourceType::Installed) {
+#ifdef _WIN32
+		if (!refreshRegisteredUninstallSource(recorded, refreshed) || !QFileInfo(refreshed.executablePath).isFile()) {
+			logMigrationWarning("the exact registered uninstall source could not be refreshed and revalidated.");
+			outError = QObject::tr("The selected installed Beeftext source could not be revalidated after it closed.");
+			return false;
+		}
+		QString const configuredExecutable = legacyConfiguredExecutablePath();
+		if (!configuredExecutable.isEmpty() && !samePath(configuredExecutable, recorded.executablePath)) {
+			logMigrationWarning("the configured upstream executable identity changed after graceful close.");
+			outError = QObject::tr("The selected installed Beeftext identity changed after it closed.");
+			return false;
+		}
+		refreshed.comboFilePath = legacyConfiguredComboFilePath();
+#else
+		outError = QObject::tr("Installed Beeftext migration is available only on Windows.");
+		return false;
+#endif
+	} else {
+		QString comboPath;
+		QString rootPath;
+		migration::EPortableProduct product;
+		if (!migration::isStrongPortableCandidate(QFileInfo(recorded.executablePath).absolutePath(),
+			&comboPath, &rootPath, &product) || product != recorded.portableProduct ||
+			!samePath(rootPath, recorded.rootPath) || !samePath(comboPath, recorded.comboFilePath)) {
+			outError = QObject::tr("The selected portable Beeftext source could not be revalidated after it closed.");
+			return false;
+		}
+		refreshed.rootPath = rootPath;
+		refreshed.comboFilePath = comboPath;
+		refreshed.cleanupSafe = !migration::isBroadCleanupRoot(rootPath, protectedCleanupRoots()) &&
+			QFileInfo(rootPath).fileName().contains("beeftext", Qt::CaseInsensitive);
+	}
+
+	QFile file(refreshed.comboFilePath);
+	if (!file.open(QIODevice::ReadOnly)) {
+		outError = QObject::tr("The selected Beeftext combo library could not be revalidated after the source closed.");
+		return false;
+	}
+	QByteArray const contents = file.readAll();
+	QByteArray const previousDigest = recorded.comboDigest;
+	refreshed.comboDigest = migration::sourceContentDigest(contents);
+	refreshed.modified = QFileInfo(refreshed.comboFilePath).lastModified();
+	if (refreshed.comboDigest.isEmpty()) {
+		outError = QObject::tr("The selected Beeftext combo library could not be revalidated after the source closed.");
+		return false;
+	}
+	if (previousDigest != refreshed.comboDigest)
+		logMigrationInfo(QString("source combo digest refreshed after graceful close from %1 to %2.")
+			.arg(digestPrefix(previousDigest), digestPrefix(refreshed.comboDigest)));
+	else
+		logMigrationInfo(QString("source combo digest revalidated as %1 before import.")
+			.arg(digestPrefix(refreshed.comboDigest)));
+	return true;
+}
 
 
 QStringList protectedCleanupRoots() {
@@ -668,7 +823,8 @@ LegacySource sourceFromJson(QJsonObject const &object) {
 }
 
 
-bool writeRecoverySnapshot(LegacySource const &source, QString &outFolder, QString &outError) {
+bool writeRecoverySnapshot(LegacySource const &source, QByteArray const &contents,
+	QString &outFolder, QString &outError) {
     QString const timestamp = QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmsszzz-'UTC'");
     QString const type = source.type == migration::ESourceType::Installed ? "installed" :
         (source.portableProduct == migration::EPortableProduct::LeanBeeftext ? "portable-lean" : "portable-upstream");
@@ -678,13 +834,11 @@ bool writeRecoverySnapshot(LegacySource const &source, QString &outFolder, QStri
         outError = QObject::tr("The migration recovery folder could not be created.");
         return false;
     }
-    QFile input(source.comboFilePath);
     QSaveFile output(QDir(outFolder).absoluteFilePath(ComboList::defaultFileName));
-    if (!input.open(QIODevice::ReadOnly) || !output.open(QIODevice::WriteOnly)) {
+	if (!migration::sourceContentMatchesDigest(contents, source.comboDigest) || !output.open(QIODevice::WriteOnly)) {
         outError = QObject::tr("The original combo library could not be copied to the migration recovery folder.");
         return false;
     }
-    QByteArray const contents = input.readAll();
     if (output.write(contents) != contents.size() || !output.commit()) {
         outError = QObject::tr("The migration recovery copy could not be committed.");
         return false;
@@ -720,21 +874,49 @@ bool sourceIsRunning(LegacySource const &source) {
 
 
 bool cleanupSource(LegacySource const &source) {
-    if (!source.cleanupSafe || fileDigest(source.comboFilePath) != source.comboDigest)
+	if (!source.cleanupSafe) {
+		if (source.type == migration::ESourceType::Installed)
+			logMigrationWarning("the selected installed source is not eligible for automatic cleanup (cleanupSafe is false).");
+		return false;
+	}
+	QByteArray const currentDigest = fileDigest(source.comboFilePath);
+	if (currentDigest != source.comboDigest) {
+		if (source.type == migration::ESourceType::Installed)
+			logMigrationWarning(QString("source combo digest changed before cleanup (expected %1, found %2); cleanup remains pending.")
+				.arg(digestPrefix(source.comboDigest), digestPrefix(currentDigest)));
         return false;
+	}
 #ifdef _WIN32
     if (source.type == migration::ESourceType::Installed) {
         if (registryViewForSource(source) &&
             migration::installedCleanupPostconditionsMet(QFileInfo(source.executablePath).exists(),
-                uninstallRegistrationExists(source)))
+				uninstallRegistrationExists(source))) {
+			logMigrationInfo("cleanup already satisfied; the recorded executable and uninstall registration are both gone.");
             return true;
+		}
         LegacySource registeredSource;
-        if (!refreshRegisteredUninstallSource(source, registeredSource) ||
-            safeRegisteredUninstallCommand(registeredSource).isEmpty())
-            return false;
+		if (!refreshRegisteredUninstallSource(source, registeredSource)) {
+			logMigrationWarning("the exact registered uninstall source could not be refreshed and revalidated; cleanup remains pending.");
+			return false;
+		}
+		ERegisteredUninstallCommandStatus commandStatus;
+		if (safeRegisteredUninstallCommand(registeredSource, &commandStatus).isEmpty()) {
+			logMigrationWarning(commandStatus == ERegisteredUninstallCommandStatus::ExecutableMissing ?
+				"the verified registered uninstaller executable is missing; cleanup remains pending." :
+				"the registered uninstall command could not be verified; cleanup remains pending.");
+			return false;
+		}
         if (migration::installedCleanupPostconditionsMet(QFileInfo(registeredSource.executablePath).exists(),
-            uninstallRegistrationExists(registeredSource)))
+			uninstallRegistrationExists(registeredSource))) {
+			logMigrationInfo("cleanup already satisfied after registry refresh.");
             return true;
+		}
+		QByteArray const preLaunchDigest = fileDigest(registeredSource.comboFilePath);
+		if (preLaunchDigest != registeredSource.comboDigest) {
+			logMigrationWarning(QString("source combo digest changed while revalidating cleanup (expected %1, found %2); cleanup remains pending.")
+				.arg(digestPrefix(registeredSource.comboDigest), digestPrefix(preLaunchDigest)));
+			return false;
+		}
         if (!invokeUninstaller(registeredSource))
             return false;
         return waitForInstalledCleanupPostconditions(registeredSource);
@@ -768,18 +950,29 @@ bool finishPendingCleanup(QSettings &settings, bool askUser) {
     if (error.error != QJsonParseError::NoError || !document.isArray())
         return false;
     if (askUser && QMessageBox::Yes != QMessageBox::question(nullptr, QObject::tr("Finish Beeftext cleanup"),
-        QObject::tr("Your combos were imported and verified, but one or more old Beeftext copies still need cleanup. Retry cleanup now?")))
+		QObject::tr("Your combos were imported and verified, but one or more old Beeftext copies still need cleanup. Retry cleanup now?"))) {
+		logMigrationInfo("cleanup retry was not selected; validated pending cleanup was left unchanged.");
         return false;
+	}
     QJsonArray remaining;
     bool installedCleanupPending = false;
     for (QJsonValue const &value: document.array()) {
         LegacySource const source = sourceFromJson(value.toObject());
-        if (sourceIsRunning(source) || !cleanupSource(source)) {
+		if (sourceIsRunning(source)) {
+			if (source.type == migration::ESourceType::Installed)
+				logMigrationWarning("the exact upstream source is running; cleanup remains pending.");
+			remaining.append(value);
+			installedCleanupPending |= source.type == migration::ESourceType::Installed;
+			continue;
+		}
+		if (!cleanupSource(source)) {
             remaining.append(value);
             installedCleanupPending |= source.type == migration::ESourceType::Installed;
         }
     }
     if (!remaining.isEmpty()) {
+		if (installedCleanupPending)
+			logMigrationWarning("installed upstream cleanup remains pending and can be retried without re-importing combos.");
         settings.setValue(kPendingCleanupKey, QJsonDocument(remaining).toJson(QJsonDocument::Compact));
         settings.sync();
         QMessageBox::warning(nullptr, QObject::tr("Cleanup incomplete"), installedCleanupPending ?
@@ -921,15 +1114,24 @@ ERunningSourceDecision closeRunningSourceWithConsent(LegacySource const &source)
 
 
 bool migrateSource(LegacySource const &source, migration::ValidationResult &validation, QString &outError) {
+	QByteArray sourceContents;
+	if (!readSourceContentsMatchingDigest(source, sourceContents, outError))
+		return false;
     QString snapshotFolder;
-    validation.snapshotCreated = writeRecoverySnapshot(source, snapshotFolder, outError);
+	validation.snapshotCreated = writeRecoverySnapshot(source, sourceContents, snapshotFolder, outError);
     if (!validation.snapshotCreated)
         return false;
 
     ComboList imported;
-    validation.parsed = imported.load(source.comboFilePath, nullptr, &outError);
-    if (!validation.parsed)
+	QJsonParseError parseError;
+	QJsonDocument const sourceDocument = QJsonDocument::fromJson(sourceContents, &parseError);
+	validation.parsed = parseError.error == QJsonParseError::NoError &&
+		imported.readFromJsonDocument(sourceDocument, nullptr, &outError);
+	if (!validation.parsed) {
+		if (outError.isEmpty())
+			outError = QObject::tr("The selected Beeftext combo library is not valid JSON.");
         return false;
+	}
     imported.ensureCorrectGrouping();
     QByteArray const expected = imported.toJsonDocument(true).toJson(QJsonDocument::Compact);
 
@@ -993,7 +1195,6 @@ void LegacyMigrationManager::runIfNeeded() {
     }
 
     QList<qsizetype> const selectedIndices = contentGroups[choice.selectedGroup];
-    LegacySource const &selected = sources[selectedIndices.first()];
     for (qsizetype const index: selectedIndices) {
         if (sourceIsRunning(sources[index])) {
             ERunningSourceDecision const closeDecision = closeRunningSourceWithConsent(sources[index]);
@@ -1006,6 +1207,20 @@ void LegacyMigrationManager::runIfNeeded() {
         }
     }
 
+	QList<LegacySource> selectedSources;
+	for (qsizetype const index: selectedIndices) {
+		LegacySource refreshed;
+		QString refreshError;
+		if (!refreshSourceBeforeImport(sources[index], refreshed, refreshError)) {
+			QMessageBox::critical(nullptr, QObject::tr("Import not completed"),
+				QObject::tr("Lean Beeftext could not safely revalidate the selected Beeftext source after it closed. Nothing was imported or removed.\n\n%1")
+					.arg(refreshError));
+			return;
+		}
+		selectedSources.append(refreshed);
+	}
+	LegacySource const &selected = selectedSources.first();
+
     migration::ValidationResult validation;
     QString error;
     if (!migrateSource(selected, validation, error) || !migration::cleanupAllowed(validation)) {
@@ -1015,23 +1230,40 @@ void LegacyMigrationManager::runIfNeeded() {
     }
 
     QJsonArray pending;
-    for (qsizetype const index: selectedIndices) {
-        LegacySource const &source = sources[index];
+    for (qsizetype index = 0; index < selectedSources.size(); ++index) {
+		LegacySource const &source = selectedSources[index];
         bool const selectedForCleanup = source.type == migration::ESourceType::Installed ?
             choice.cleanupInstalled : choice.cleanupPortable;
-        if (selectedForCleanup && source.cleanupSafe) {
-            if (index == selectedIndices.first()) {
-                pending.append(sourceToJson(source));
-            } else {
-                QString additionalSnapshot;
-                QString snapshotError;
-                if (writeRecoverySnapshot(source, additionalSnapshot, snapshotError))
-                    pending.append(sourceToJson(source));
-                else
-                    QMessageBox::warning(nullptr, QObject::tr("Cleanup skipped"),
-                        QObject::tr("A recovery copy could not be made for %1, so that old copy will not be removed.\n\n%2")
-                            .arg(QDir::toNativeSeparators(source.rootPath), snapshotError));
-            }
+		if (!source.cleanupSafe) {
+			if (source.type == migration::ESourceType::Installed)
+				logMigrationWarning("the selected installed source is not eligible for automatic cleanup (cleanupSafe is false).");
+			continue;
+		}
+		if (!selectedForCleanup) {
+			if (source.type == migration::ESourceType::Installed)
+				logMigrationInfo("installed upstream cleanup was not selected; only the combo import was completed.");
+			continue;
+		}
+		if (source.comboDigest != selected.comboDigest) {
+			logMigrationWarning(QString("a previously grouped source changed after graceful close (%1 versus imported %2); it will not be removed.")
+				.arg(digestPrefix(source.comboDigest), digestPrefix(selected.comboDigest)));
+			QMessageBox::warning(nullptr, QObject::tr("Cleanup skipped"),
+				QObject::tr("A selected Beeftext copy changed after it closed and no longer matched the imported library, so that copy will not be removed."));
+			continue;
+		}
+		if (index == 0) {
+			pending.append(sourceToJson(source));
+		} else {
+			QByteArray additionalContents;
+			QString additionalSnapshot;
+			QString snapshotError;
+			if (readSourceContentsMatchingDigest(source, additionalContents, snapshotError) &&
+				writeRecoverySnapshot(source, additionalContents, additionalSnapshot, snapshotError))
+				pending.append(sourceToJson(source));
+			else
+				QMessageBox::warning(nullptr, QObject::tr("Cleanup skipped"),
+					QObject::tr("A recovery copy could not be made for %1, so that old copy will not be removed.\n\n%2")
+						.arg(QDir::toNativeSeparators(source.rootPath), snapshotError));
         }
     }
     settings.setValue(kMigrationStateKey, int(migration::EState::ImportCompleted));

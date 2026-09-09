@@ -4,6 +4,7 @@
 
 #include "LegacyMigrationCore.h"
 #include <QDir>
+#include <QCryptographicHash>
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
@@ -11,6 +12,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QRegularExpression>
 
 
 namespace migration {
@@ -33,6 +35,17 @@ QString normalizedPath(QString const &path) {
 QString executableFromCommand(QString const &command) {
     QStringList const parts = QProcess::splitCommand(command.trimmed());
     return parts.isEmpty() ? QString() : parts.first();
+}
+
+
+QString parametersFromCommand(QString const &command) {
+	QString const trimmed = command.trimmed();
+	if (trimmed.startsWith('"')) {
+		qsizetype const closingQuote = trimmed.indexOf('"', 1);
+		return closingQuote < 0 ? QString() : trimmed.mid(closingQuote + 1).trimmed();
+	}
+	qsizetype const whitespace = trimmed.indexOf(QRegularExpression("\\s"));
+	return whitespace < 0 ? QString() : trimmed.mid(whitespace + 1).trimmed();
 }
 
 
@@ -133,6 +146,41 @@ bool installedMetadataIsConsistent(QString const &displayName, QString const &pu
         return false;
     QString const uninstallName = QFileInfo(uninstaller).fileName().toCaseFolded();
 	return uninstallName.startsWith("unins") || uninstallName.contains("uninstall");
+}
+
+
+bool buildVerifiedUpstreamNsisUninstallParameters(QString const &displayName, QString const &publisher,
+	QString const &installLocation, QString const &uninstallCommand, QString const &executablePath,
+	QString *outParameters) {
+	if (!outParameters || !installedMetadataIsConsistent(displayName, publisher, installLocation,
+		uninstallCommand, executablePath))
+		return false;
+	if (displayName.trimmed().compare("Beeftext", Qt::CaseInsensitive) != 0 ||
+		(publisher.trimmed().compare("beeftext.org", Qt::CaseInsensitive) != 0 &&
+			!publisher.contains("Michelon", Qt::CaseInsensitive)))
+		return false;
+	QString const uninstaller = executableFromCommand(uninstallCommand);
+	if (QFileInfo(uninstaller).fileName().compare("Uninstall.exe", Qt::CaseInsensitive) != 0)
+		return false;
+	QString parameters = parametersFromCommand(uninstallCommand);
+	if (parameters.contains(QRegularExpression("(?:^|\\s)_\\?=", QRegularExpression::CaseInsensitiveOption)))
+		return false; // Never trust or duplicate a registered install-root override.
+	if (!parameters.isEmpty())
+		parameters.append(' ');
+	// NSIS requires _?= to be the final argument and its path to remain unquoted, including when it contains spaces.
+	parameters.append("_?=" + QDir::toNativeSeparators(QDir::cleanPath(installLocation)));
+	*outParameters = parameters;
+	return true;
+}
+
+
+QByteArray sourceContentDigest(QByteArray const &contents) {
+	return QCryptographicHash::hash(contents, QCryptographicHash::Sha256);
+}
+
+
+bool sourceContentMatchesDigest(QByteArray const &contents, QByteArray const &digest) {
+	return !digest.isEmpty() && sourceContentDigest(contents) == digest;
 }
 
 
