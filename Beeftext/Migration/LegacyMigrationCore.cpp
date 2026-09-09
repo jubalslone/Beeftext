@@ -136,6 +136,11 @@ bool installedMetadataIsConsistent(QString const &displayName, QString const &pu
 }
 
 
+bool installedCleanupPostconditionsMet(bool executableExists, bool uninstallRegistrationExists) {
+	return !executableExists && !uninstallRegistrationExists;
+}
+
+
 QList<QList<qsizetype>> groupSourcesByContent(QList<QByteArray> const &digests) {
     QList<QList<qsizetype>> result;
     QHash<QByteArray, qsizetype> groupByDigest;

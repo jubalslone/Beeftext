@@ -10,7 +10,7 @@ param(
 	[string]$Destination,
 
 	[string]$SourceCommit = '',
-	[string]$Repository = 'jubalslone/Beeftext',
+	[string]$Repository = 'jubalslone/lean-beeftext',
 	[string]$WorkflowRun = 'local'
 )
 

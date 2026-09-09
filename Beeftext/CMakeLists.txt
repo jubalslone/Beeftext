@@ -216,6 +216,7 @@ target_link_libraries(Beeftext XMiLib)
 target_link_libraries(Beeftext Winmm)
 target_link_libraries(Beeftext Shell32)
 target_link_libraries(Beeftext Ole32)
+target_link_libraries(Beeftext Rstrtmgr)
 
 if(BUILD_TESTING)
    add_executable(LeanSecurityModelTests

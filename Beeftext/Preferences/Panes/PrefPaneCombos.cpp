@@ -220,10 +220,9 @@ void PrefPaneCombos::applyComboPickerShortcut() {
         this->updateGui();
         return;
     }
-    QMessageBox::critical(this, tr("Error"), tr("The shortcut could not be registered. Combo picker will be disabled"));
+    QMessageBox::critical(this, tr("Error"), tr("The shortcut could not be registered. Quick Search will be disabled"));
     QSignalBlocker blocker(ui_.checkEnablePickerWindow);
     ui_.checkEnablePickerWindow->setChecked(false);
     this->updateGui();
 }
-
 

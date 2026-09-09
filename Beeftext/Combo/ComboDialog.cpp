@@ -26,7 +26,7 @@ namespace {
 //****************************************************************************************************************************************************
 QString variablesLabel() {
     return QObject::tr(R"(
-      <html><head/><body><p><a href="https://github.com/jubalslone/Beeftext#variables">
+      <html><head/><body><p><a href="https://github.com/jubalslone/lean-beeftext#variables">
       About variables</a></p></body></html>)");
 }
 

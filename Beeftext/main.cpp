@@ -221,16 +221,16 @@ void setupPickerWindowShortcut() {
     if (shortcut->keyboardModifiers().testFlag(Qt::MetaModifier)) {
         shortcut = PreferencesManager::defaultComboPickerShortcut();
         prefs.setComboPickerShortcut(shortcut);
-        debugLog.addWarning("Thecombo picker shortcut contained the Windows key. It has been reset to the default value.");
-        QMessageBox::information(nullptr, QObject::tr("Error"), QObject::tr("The combo picker shortcut cannot contain"
+        debugLog.addWarning("The Quick Search shortcut contained the Windows key. It has been reset to the default value.");
+        QMessageBox::information(nullptr, QObject::tr("Error"), QObject::tr("The Quick Search shortcut cannot contain"
                                                                             " the Windows key. The shortcut is now %1.").arg(shortcut->toString()));
     }
     if (applyComboPickerPreferences())
         return;
 
     prefs.setComboPickerEnabled(false);
-    debugLog.addError(QString("The shortcut for the combo picker windows (%1) could not be registered. "
-                              "The combo picker has been turned off.").arg(shortcut ? shortcut->toString() : "<unknown>"));
-    QMessageBox::critical(nullptr, QObject::tr("Error"), QObject::tr("The shortcut for the combo picker window "
-                                                                     "could not be registered. The combo picker has been turned off."));
+    debugLog.addError(QString("The Quick Search shortcut (%1) could not be registered. "
+                              "Quick Search has been turned off.").arg(shortcut ? shortcut->toString() : "<unknown>"));
+    QMessageBox::critical(nullptr, QObject::tr("Error"), QObject::tr("The Quick Search shortcut "
+                                                                     "could not be registered. Quick Search has been turned off."));
 }

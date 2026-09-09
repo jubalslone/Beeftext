@@ -1,7 +1,7 @@
 #define MyAppName "Lean Beeftext"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Jubal Slone"
-#define MyAppURL "https://github.com/jubalslone/Beeftext"
+#define MyAppURL "https://github.com/jubalslone/lean-beeftext"
 #define MyAppExeName "LeanBeeftext.exe"
 
 [Setup]
@@ -11,8 +11,8 @@ AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
-AppSupportURL=https://github.com/jubalslone/Beeftext/issues
-AppUpdatesURL=https://github.com/jubalslone/Beeftext/releases
+AppSupportURL=https://github.com/jubalslone/lean-beeftext/issues
+AppUpdatesURL=https://github.com/jubalslone/lean-beeftext/releases
 DefaultDirName={autopf}\Lean Beeftext
 DefaultGroupName=Lean Beeftext
 DisableProgramGroupPage=yes
@@ -40,6 +40,10 @@ VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} installer
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}
+
+[Messages]
+ConfirmUninstall=Are you sure you want to remove Lean Beeftext and its installed components?%n%nYour Lean Beeftext user data will not be removed.
+UninstalledAll=Lean Beeftext was successfully removed.%n%nYour user data was kept.
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked

@@ -321,7 +321,7 @@ QString PickerWindow::textForItemAtIndex(QModelIndex const &index) {
     QString str;
     if (isCombo) {
         if (!combo) {
-            globals::debugLog().addError("Picker window could not retrieve selected combo.");
+            globals::debugLog().addError("Quick Search could not retrieve the selected combo.");
             return QString();
         }
         bool cancelled = false;
@@ -331,7 +331,7 @@ QString PickerWindow::textForItemAtIndex(QModelIndex const &index) {
 
     SpEmoji const emoji = index.data(constants::PointerRole).value<SpEmoji>();
     if (!emoji) {
-        globals::debugLog().addError("Picker window could not retrieve the selected emoji.");
+        globals::debugLog().addError("Quick Search could not retrieve the selected emoji.");
         return QString();
     }
     emoji->setlastUseDateTime(QDateTime::currentDateTime());

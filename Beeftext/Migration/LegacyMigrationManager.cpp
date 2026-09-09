@@ -12,6 +12,7 @@
 
 #ifdef _WIN32
 #include <TlHelp32.h>
+#include <restartmanager.h>
 #include <shellapi.h>
 #include <shlobj.h>
 #include <shobjidl.h>
@@ -36,6 +37,9 @@ struct LegacySource {
     QString publisher;
     QString uninstallCommand;
     QString quietUninstallCommand;
+    QString uninstallRegistryHive;
+    QString uninstallRegistrySubkey;
+    quint32 uninstallRegistryView { 0 };
     QStringList shortcutPaths;
     QByteArray comboDigest;
     QDateTime modified;
@@ -85,6 +89,27 @@ QString legacyConfiguredExecutablePath() {
 
 
 #ifdef _WIN32
+
+
+struct RegistryView {
+    HKEY hive;
+    wchar_t const *name;
+    REGSAM view;
+    quint32 bitness;
+};
+
+
+RegistryView const kRegistryViews[] = {
+    { HKEY_CURRENT_USER, L"HKCU", KEY_WOW64_64KEY, 64 },
+    { HKEY_CURRENT_USER, L"HKCU", KEY_WOW64_32KEY, 32 },
+    { HKEY_LOCAL_MACHINE, L"HKLM", KEY_WOW64_64KEY, 64 },
+    { HKEY_LOCAL_MACHINE, L"HKLM", KEY_WOW64_32KEY, 32 },
+};
+
+
+wchar_t const *kUninstallRegistryPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+DWORD constexpr kPostUninstallWaitMs = 10000;
+DWORD constexpr kGracefulCloseWaitMs = 10000;
 
 
 QString registryString(HKEY key, wchar_t const *valueName) {
@@ -142,15 +167,9 @@ QList<LegacySource> registeredInstalledSources() {
     QList<LegacySource> result;
     QString const configuredCombo = legacyConfiguredComboFilePath();
     QString const configuredExe = legacyConfiguredExecutablePath();
-    struct RegistryView { HKEY hive; REGSAM view; };
-    RegistryView const views[] = {
-        { HKEY_CURRENT_USER, KEY_WOW64_64KEY }, { HKEY_CURRENT_USER, KEY_WOW64_32KEY },
-        { HKEY_LOCAL_MACHINE, KEY_WOW64_64KEY }, { HKEY_LOCAL_MACHINE, KEY_WOW64_32KEY },
-    };
-    wchar_t const *uninstallPath = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
-    for (RegistryView const &view: views) {
+    for (RegistryView const &view: kRegistryViews) {
         HKEY base = nullptr;
-        if (RegOpenKeyExW(view.hive, uninstallPath, 0, KEY_READ | view.view, &base) != ERROR_SUCCESS)
+        if (RegOpenKeyExW(view.hive, kUninstallRegistryPath, 0, KEY_READ | view.view, &base) != ERROR_SUCCESS)
             continue;
         DWORD index = 0;
         wchar_t subkeyName[512] = {};
@@ -165,6 +184,10 @@ QList<LegacySource> registeredInstalledSources() {
                 source.rootPath = registryString(entry, L"InstallLocation");
                 source.uninstallCommand = registryString(entry, L"UninstallString");
                 source.quietUninstallCommand = registryString(entry, L"QuietUninstallString");
+                source.uninstallRegistryHive = QString::fromWCharArray(view.name);
+                source.uninstallRegistrySubkey = QString("%1\\%2").arg(QString::fromWCharArray(kUninstallRegistryPath),
+                    QString::fromWCharArray(subkeyName));
+                source.uninstallRegistryView = view.bitness;
                 QString exe = configuredExe;
                 if (exe.isEmpty() && !source.rootPath.isEmpty())
                     exe = QDir(source.rootPath).absoluteFilePath("Beeftext.exe");
@@ -187,6 +210,42 @@ QList<LegacySource> registeredInstalledSources() {
         }
         RegCloseKey(base);
     }
+    return result;
+}
+
+
+struct RunningProcess {
+    DWORD id { 0 };
+    QString executablePath;
+};
+
+
+QList<RunningProcess> runningProcessesForExecutable(QString const &executablePath) {
+    QList<RunningProcess> result;
+    QString const expectedFileName = QFileInfo(executablePath).fileName();
+    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE)
+        return result;
+    PROCESSENTRY32W entry = {};
+    entry.dwSize = sizeof(entry);
+    if (Process32FirstW(snapshot, &entry)) {
+        do {
+            if (QString::fromWCharArray(entry.szExeFile).compare(expectedFileName, Qt::CaseInsensitive) != 0)
+                continue;
+            HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, entry.th32ProcessID);
+            if (!process)
+                continue;
+            std::vector<wchar_t> path(32768, L'\0');
+            DWORD length = DWORD(path.size());
+            if (QueryFullProcessImageNameW(process, 0, path.data(), &length)) {
+                QString const runningPath = QString::fromWCharArray(path.data(), int(length));
+                if (samePath(runningPath, executablePath))
+                    result.append({ entry.th32ProcessID, runningPath });
+            }
+            CloseHandle(process);
+        } while (Process32NextW(snapshot, &entry));
+    }
+    CloseHandle(snapshot);
     return result;
 }
 
@@ -282,11 +341,173 @@ bool invokeUninstaller(LegacySource const &source) {
     info.nShow = SW_SHOWNORMAL;
     if (!ShellExecuteExW(&info) || !info.hProcess)
         return false;
-    WaitForSingleObject(info.hProcess, INFINITE);
-    DWORD exitCode = ERROR_GEN_FAILURE;
-    GetExitCodeProcess(info.hProcess, &exitCode);
+    DWORD const waitResult = WaitForSingleObject(info.hProcess, INFINITE);
     CloseHandle(info.hProcess);
-    return exitCode == 0;
+    // An upstream uninstaller's exit code is not proof that it actually removed the application.
+    return waitResult == WAIT_OBJECT_0;
+}
+
+
+RegistryView const *registryViewForSource(LegacySource const &source) {
+    for (RegistryView const &view: kRegistryViews)
+        if (source.uninstallRegistryHive.compare(QString::fromWCharArray(view.name), Qt::CaseInsensitive) == 0 &&
+            source.uninstallRegistryView == view.bitness)
+            return &view;
+    return nullptr;
+}
+
+
+bool uninstallRegistrationExists(LegacySource const &source) {
+    RegistryView const *view = registryViewForSource(source);
+    if (!view || source.uninstallRegistrySubkey.isEmpty())
+        return true; // Unknown registration identity fails closed.
+    HKEY entry = nullptr;
+    LONG const status = RegOpenKeyExW(view->hive,
+        reinterpret_cast<LPCWSTR>(source.uninstallRegistrySubkey.utf16()), 0, KEY_READ | view->view, &entry);
+    if (status == ERROR_SUCCESS) {
+        RegCloseKey(entry);
+        return true;
+    }
+    return status != ERROR_FILE_NOT_FOUND && status != ERROR_PATH_NOT_FOUND;
+}
+
+
+bool loadRegisteredUninstallSource(RegistryView const &view, QString const &subkey,
+    LegacySource const &recorded, LegacySource &result) {
+    HKEY entry = nullptr;
+    if (RegOpenKeyExW(view.hive, reinterpret_cast<LPCWSTR>(subkey.utf16()), 0,
+        KEY_READ | view.view, &entry) != ERROR_SUCCESS)
+        return false;
+    result = recorded;
+    result.displayName = registryString(entry, L"DisplayName");
+    result.publisher = registryString(entry, L"Publisher");
+    result.rootPath = registryString(entry, L"InstallLocation");
+    result.uninstallCommand = registryString(entry, L"UninstallString");
+    result.quietUninstallCommand = registryString(entry, L"QuietUninstallString");
+    result.uninstallRegistryHive = QString::fromWCharArray(view.name);
+    result.uninstallRegistrySubkey = subkey;
+    result.uninstallRegistryView = view.bitness;
+    RegCloseKey(entry);
+    if (!samePath(result.rootPath, recorded.rootPath) ||
+        result.displayName.compare(recorded.displayName, Qt::CaseInsensitive) != 0 ||
+        result.publisher.compare(recorded.publisher, Qt::CaseInsensitive) != 0)
+        return false;
+    result.cleanupSafe = !safeRegisteredUninstallCommand(result).isEmpty();
+    return result.cleanupSafe;
+}
+
+
+bool refreshRegisteredUninstallSource(LegacySource const &recorded, LegacySource &result) {
+    if (RegistryView const *view = registryViewForSource(recorded)) {
+        if (loadRegisteredUninstallSource(*view, recorded.uninstallRegistrySubkey, recorded, result))
+            return true;
+        return false;
+    }
+
+    // Pending cleanup written by an earlier Lean build did not record the key identity.
+    // Resolve it once by exact installed metadata so that retry remains possible.
+    bool found = false;
+    for (RegistryView const &view: kRegistryViews) {
+        HKEY base = nullptr;
+        if (RegOpenKeyExW(view.hive, kUninstallRegistryPath, 0, KEY_READ | view.view, &base) != ERROR_SUCCESS)
+            continue;
+        DWORD index = 0;
+        wchar_t subkeyName[512] = {};
+        DWORD subkeyLength = 512;
+        while (RegEnumKeyExW(base, index++, subkeyName, &subkeyLength, nullptr, nullptr, nullptr, nullptr) == ERROR_SUCCESS) {
+            QString const subkey = QString("%1\\%2").arg(QString::fromWCharArray(kUninstallRegistryPath),
+                QString::fromWCharArray(subkeyName));
+            LegacySource candidate;
+            if (loadRegisteredUninstallSource(view, subkey, recorded, candidate)) {
+                if (found) {
+                    RegCloseKey(base);
+                    return false; // Ambiguous legacy pending state fails closed.
+                }
+                result = candidate;
+                found = true;
+            }
+            subkeyLength = 512;
+        }
+        RegCloseKey(base);
+    }
+    return found;
+}
+
+
+bool waitForInstalledCleanupPostconditions(LegacySource const &source) {
+    DWORD elapsed = 0;
+    while (true) {
+        if (migration::installedCleanupPostconditionsMet(QFileInfo(source.executablePath).exists(),
+            uninstallRegistrationExists(source)))
+            return true;
+        if (elapsed >= kPostUninstallWaitMs)
+            return false;
+        Sleep(250);
+        elapsed += 250;
+    }
+}
+
+
+bool requestGracefulClose(LegacySource const &source) {
+    QList<RunningProcess> const processes = runningProcessesForExecutable(source.executablePath);
+    if (processes.isEmpty())
+        return true;
+
+    DWORD session = 0;
+    wchar_t sessionKey[CCH_RM_SESSION_KEY + 1] = {};
+    if (RmStartSession(&session, 0, sessionKey) != ERROR_SUCCESS)
+        return false;
+    QString const exactExecutable = canonicalPath(source.executablePath);
+    LPCWSTR resources[] = { reinterpret_cast<LPCWSTR>(exactExecutable.utf16()) };
+    bool success = RmRegisterResources(session, 1, resources, 0, nullptr, 0, nullptr) == ERROR_SUCCESS;
+    UINT needed = 0;
+    UINT count = 0;
+    DWORD reasons = 0;
+    DWORD listStatus = success ? RmGetList(session, &needed, &count, nullptr, &reasons) : ERROR_INVALID_DATA;
+    std::vector<RM_PROCESS_INFO> processInfo;
+    if (listStatus == ERROR_MORE_DATA) {
+        processInfo.resize(needed);
+        count = needed;
+        listStatus = RmGetList(session, &needed, &count, processInfo.data(), &reasons);
+    }
+    success = success && listStatus == ERROR_SUCCESS;
+
+    QSet<DWORD> exactProcessIds;
+    for (RunningProcess const &process: processes)
+        exactProcessIds.insert(process.id);
+    QSet<DWORD> restartManagerProcessIds;
+    if (success) {
+        for (UINT index = 0; index < count; ++index) {
+            DWORD const processId = processInfo[index].Process.dwProcessId;
+            HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, processId);
+            std::vector<wchar_t> path(32768, L'\0');
+            DWORD length = DWORD(path.size());
+            bool const pathMatches = process && QueryFullProcessImageNameW(process, 0, path.data(), &length) &&
+                samePath(QString::fromWCharArray(path.data(), int(length)), source.executablePath);
+            if (process)
+                CloseHandle(process);
+            if (!pathMatches) {
+                success = false; // Never close a process that is not the exact validated source.
+                break;
+            }
+            restartManagerProcessIds.insert(processId);
+        }
+    }
+    success = success && exactProcessIds == restartManagerProcessIds;
+    if (success)
+        success = RmShutdown(session, 0, nullptr) == ERROR_SUCCESS; // Zero flags request graceful close only.
+    RmEndSession(session);
+    if (!success)
+        return false;
+
+    DWORD elapsed = 0;
+    while (!runningProcessesForExecutable(source.executablePath).isEmpty()) {
+        if (elapsed >= kGracefulCloseWaitMs)
+            return false;
+        Sleep(250);
+        elapsed += 250;
+    }
+    return true;
 }
 
 
@@ -414,6 +635,9 @@ QJsonObject sourceToJson(LegacySource const &source) {
     object["publisher"] = source.publisher;
     object["uninstallCommand"] = source.uninstallCommand;
     object["quietUninstallCommand"] = source.quietUninstallCommand;
+    object["uninstallRegistryHive"] = source.uninstallRegistryHive;
+    object["uninstallRegistrySubkey"] = source.uninstallRegistrySubkey;
+    object["uninstallRegistryView"] = int(source.uninstallRegistryView);
     object["shortcutPaths"] = QJsonArray::fromStringList(source.shortcutPaths);
     object["comboDigest"] = QString::fromLatin1(source.comboDigest.toHex());
     object["cleanupSafe"] = source.cleanupSafe;
@@ -433,6 +657,9 @@ LegacySource sourceFromJson(QJsonObject const &object) {
     source.publisher = object["publisher"].toString();
     source.uninstallCommand = object["uninstallCommand"].toString();
     source.quietUninstallCommand = object["quietUninstallCommand"].toString();
+    source.uninstallRegistryHive = object["uninstallRegistryHive"].toString();
+    source.uninstallRegistrySubkey = object["uninstallRegistrySubkey"].toString();
+    source.uninstallRegistryView = quint32(object["uninstallRegistryView"].toInt());
     for (QJsonValue const &value: object["shortcutPaths"].toArray())
         source.shortcutPaths.append(value.toString());
     source.comboDigest = QByteArray::fromHex(object["comboDigest"].toString().toLatin1());
@@ -497,9 +724,20 @@ bool cleanupSource(LegacySource const &source) {
         return false;
 #ifdef _WIN32
     if (source.type == migration::ESourceType::Installed) {
-		if (safeRegisteredUninstallCommand(source).isEmpty())
+        if (registryViewForSource(source) &&
+            migration::installedCleanupPostconditionsMet(QFileInfo(source.executablePath).exists(),
+                uninstallRegistrationExists(source)))
+            return true;
+        LegacySource registeredSource;
+        if (!refreshRegisteredUninstallSource(source, registeredSource) ||
+            safeRegisteredUninstallCommand(registeredSource).isEmpty())
             return false;
-        return invokeUninstaller(source);
+        if (migration::installedCleanupPostconditionsMet(QFileInfo(registeredSource.executablePath).exists(),
+            uninstallRegistrationExists(registeredSource)))
+            return true;
+        if (!invokeUninstaller(registeredSource))
+            return false;
+        return waitForInstalledCleanupPostconditions(registeredSource);
     }
     QString comboPath;
     QString rootPath;
@@ -533,16 +771,20 @@ bool finishPendingCleanup(QSettings &settings, bool askUser) {
         QObject::tr("Your combos were imported and verified, but one or more old Beeftext copies still need cleanup. Retry cleanup now?")))
         return false;
     QJsonArray remaining;
+    bool installedCleanupPending = false;
     for (QJsonValue const &value: document.array()) {
         LegacySource const source = sourceFromJson(value.toObject());
-        if (sourceIsRunning(source) || !cleanupSource(source))
+        if (sourceIsRunning(source) || !cleanupSource(source)) {
             remaining.append(value);
+            installedCleanupPending |= source.type == migration::ESourceType::Installed;
+        }
     }
     if (!remaining.isEmpty()) {
         settings.setValue(kPendingCleanupKey, QJsonDocument(remaining).toJson(QJsonDocument::Compact));
         settings.sync();
-        QMessageBox::warning(nullptr, QObject::tr("Cleanup incomplete"),
-            QObject::tr("One or more old Beeftext copies could not be removed safely. Your imported Lean Beeftext combos are intact; cleanup can be retried later."));
+        QMessageBox::warning(nullptr, QObject::tr("Cleanup incomplete"), installedCleanupPending ?
+            QObject::tr("Your combos were imported successfully, but the old Beeftext installation could not be removed. You can retry cleanup the next time Lean Beeftext starts.") :
+            QObject::tr("One or more old portable Beeftext copies could not be removed safely. Your imported Lean Beeftext combos are intact; cleanup can be retried later."));
         return false;
     }
     settings.remove(kPendingCleanupKey);
@@ -563,7 +805,7 @@ struct MigrationChoice {
 
 MigrationChoice showMigrationDialog(QList<LegacySource> const &sources, QList<QList<qsizetype>> const &contentGroups) {
     QDialog dialog;
-    dialog.setWindowTitle(QObject::tr("Import from Beeftext"));
+    dialog.setWindowTitle(QObject::tr("Import from Beeftext → Lean Beeftext"));
     dialog.setMinimumWidth(620);
     auto *layout = new QVBoxLayout(&dialog);
     auto *heading = new QLabel(QObject::tr("<b>Lean Beeftext found an existing Beeftext setup.</b>"));
@@ -651,6 +893,33 @@ MigrationChoice showMigrationDialog(QList<LegacySource> const &sources, QList<QL
 }
 
 
+enum class ERunningSourceDecision {
+    Closed,
+    Cancelled,
+    Failed,
+};
+
+
+ERunningSourceDecision closeRunningSourceWithConsent(LegacySource const &source) {
+    QMessageBox prompt(QMessageBox::Question, QObject::tr("Beeftext is currently running"),
+        QObject::tr("Beeftext is currently running.\nLean Beeftext needs it closed before importing your combos."),
+        QMessageBox::NoButton);
+    QPushButton *closeButton = prompt.addButton(QObject::tr("Close Beeftext and continue"), QMessageBox::AcceptRole);
+    QPushButton *cancelButton = prompt.addButton(QMessageBox::Cancel);
+    prompt.setDefaultButton(closeButton);
+    prompt.setEscapeButton(cancelButton);
+    prompt.exec();
+    if (prompt.clickedButton() != closeButton)
+        return ERunningSourceDecision::Cancelled;
+#ifdef _WIN32
+    return requestGracefulClose(source) ? ERunningSourceDecision::Closed : ERunningSourceDecision::Failed;
+#else
+    Q_UNUSED(source)
+    return ERunningSourceDecision::Failed;
+#endif
+}
+
+
 bool migrateSource(LegacySource const &source, migration::ValidationResult &validation, QString &outError) {
     QString snapshotFolder;
     validation.snapshotCreated = writeRecoverySnapshot(source, snapshotFolder, outError);
@@ -727,9 +996,13 @@ void LegacyMigrationManager::runIfNeeded() {
     LegacySource const &selected = sources[selectedIndices.first()];
     for (qsizetype const index: selectedIndices) {
         if (sourceIsRunning(sources[index])) {
-            QMessageBox::warning(nullptr, QObject::tr("Close Beeftext"),
-                QObject::tr("Close the detected upstream Beeftext application, then start Lean Beeftext again. Nothing has been imported or removed."));
-            return;
+            ERunningSourceDecision const closeDecision = closeRunningSourceWithConsent(sources[index]);
+            if (closeDecision == ERunningSourceDecision::Closed)
+                continue;
+            if (closeDecision == ERunningSourceDecision::Failed)
+                QMessageBox::warning(nullptr, QObject::tr("Beeftext could not be closed"),
+                    QObject::tr("Beeftext could not be closed automatically. Close it manually, then try the import again. Nothing has been imported or removed."));
+            return; // Cancel and failure both leave migration and cleanup untouched and retryable.
         }
     }
 

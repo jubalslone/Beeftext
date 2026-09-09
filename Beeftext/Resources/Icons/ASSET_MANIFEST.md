@@ -31,6 +31,6 @@ The script was validated with ImageMagick 7.1.1-43 Q16. `SHA256SUMS.txt` records
 | Enabled system tray icon | `LeanBeeftextTray.ico` |
 | Paused system tray icon | `LeanBeeftextTrayPaused.ico` |
 | About dialog | `App/LeanBeeftextApp-128.png` |
-| Picker window | `App/LeanBeeftextApp-32.png` |
+| Quick Search window | `App/LeanBeeftextApp-32.png` |
 
 `LeanBeeftextApp.ico` and `LeanBeeftextAppPaused.ico` contain 16, 20, 24, 32, 48, 64, 128, and 256px frames. Their true 16×16 frame deliberately uses the dedicated bull-only optical artwork; all frames from 20×20 upward use the full framed master. Tray ICOs contain only the dedicated optical 16×16 and simplified 32×32 bull frames.

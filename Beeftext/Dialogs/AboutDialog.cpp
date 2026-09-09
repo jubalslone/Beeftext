@@ -38,7 +38,7 @@ void AboutDialog::completeText() const {
     QString const licenseUrl = QUrl::fromLocalFile(QDir(applicationDir).absoluteFilePath("LICENSE")).toString();
     QString const noticesUrl = QUrl::fromLocalFile(QDir(applicationDir).absoluteFilePath("THIRD_PARTY_NOTICES.md")).toString();
     ui_.labelLinks->setText(tr(
-        R"(<a href="https://github.com/jubalslone/Beeftext">Project Repository</a> &nbsp;·&nbsp; )"
+        R"(<a href="https://github.com/jubalslone/lean-beeftext">Project Repository</a> &nbsp;·&nbsp; )"
         R"(<a href="https://github.com/xmichelo/Beeftext">Upstream Beeftext</a> &nbsp;·&nbsp; )"
         R"(<a href="%1">MIT License</a> &nbsp;·&nbsp; <a href="%2">Third-Party Notices</a>)")
         .arg(licenseUrl.toHtmlEscaped(), noticesUrl.toHtmlEscaped()));

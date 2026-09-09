@@ -26,10 +26,10 @@ QString const kApplicationName = "Lean Beeftext";
 // reads the legacy beeftext.org/Beeftext identity only as an upstream source.
 QString const kSettingsApplicationName = "Lean Beeftext";
 QString const kOrganizationName = "Jubal Slone";
-QString const kBeeftextWikiHomeUrl = "https://github.com/jubalslone/Beeftext";
-QString const kBeeftextWikiVariablesUrl = "https://github.com/jubalslone/Beeftext#variables";
-QString const kBeeftextReleasesPagesUrl = "https://github.com/jubalslone/Beeftext/releases";
-QString const kBeeftextIssueTrackerUrl = "https://github.com/jubalslone/Beeftext/issues";
+QString const kBeeftextWikiHomeUrl = "https://github.com/jubalslone/lean-beeftext";
+QString const kBeeftextWikiVariablesUrl = "https://github.com/jubalslone/lean-beeftext#variables";
+QString const kBeeftextReleasesPagesUrl = "https://github.com/jubalslone/lean-beeftext/releases";
+QString const kBeeftextIssueTrackerUrl = "https://github.com/jubalslone/lean-beeftext/issues";
 QString const kKeyVariableRegExpStr(R"(#{key:(\w+)(?>:(\d+))?})");
 QString const kShortcutVariableRegExpStr(R"(#{shortcut:(.+)})");
 QString const kDelayVariableRegExpStr(R"(#{delay:(\d+)})");

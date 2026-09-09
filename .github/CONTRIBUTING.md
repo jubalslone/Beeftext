@@ -1,6 +1,6 @@
 # Contributing to Lean Beeftext
 
-Thank you for helping improve Lean Beeftext. Before opening an issue, check the [existing issues](https://github.com/jubalslone/Beeftext/issues) and include the exact Lean Beeftext version, Windows version, portable/installed status, and reproducible steps.
+Thank you for helping improve Lean Beeftext. Before opening an issue, check the [existing issues](https://github.com/jubalslone/lean-beeftext/issues) and include the exact Lean Beeftext version, Windows version, portable/installed status, and reproducible steps.
 
 Lean Beeftext deliberately has a narrower execution model than upstream Beeftext. Changes must preserve the boundaries in [SECURITY_MODEL.md](../SECURITY_MODEL.md), including literal handling of blocked variables, direct text insertion, modifier refusal, bounded cursor movement, portable containment, and disabled upstream updating.
 

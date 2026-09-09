@@ -541,7 +541,7 @@ void testProductFinishingSurface() {
         && constantsHeader.contains("kSettingsApplicationName")
         && readRepositoryFile("Installer/LeanBeeftext.iss").contains("#define MyAppPublisher \"Jubal Slone\""),
         "installed settings identity and public publisher attribution retain their permanent Lean values");
-	expect(constantsSource.contains("https://github.com/jubalslone/Beeftext#variables"),
+	expect(constantsSource.contains("https://github.com/jubalslone/lean-beeftext#variables"),
 		"About Variables uses the README Variables anchor");
 
 	QString const preferencesSource = readSourceFile("Preferences/PreferencesManager.cpp");
@@ -665,6 +665,30 @@ void testProductFinishingSurface() {
 	expect(readSourceFile("Combo/ComboPortability.cpp").contains("Legacy Beeftext JSON files (*.json)")
 		&& readSourceFile("Combo/ComboPortability.cpp").contains("Legacy Beeftext CSV files (*.csv)"),
 		"legacy Beeftext import format labels remain correctly branded");
+
+	QString const quickSearchSurfaces = readRepositoryFile("README.md")
+		+ readSourceFile("Preferences/Panes/PrefPaneCombos.ui")
+		+ readSourceFile("Preferences/Panes/PrefPaneEmojis.ui")
+		+ readSourceFile("Preferences/Panes/PrefPaneCombos.cpp");
+	expect(quickSearchSurfaces.contains("Quick Search")
+		&& !quickSearchSurfaces.contains("Combo Picker", Qt::CaseInsensitive)
+		&& !quickSearchSurfaces.contains("picker window", Qt::CaseInsensitive)
+		&& entryPointSource.contains("The Quick Search shortcut")
+		&& !entryPointSource.contains("\"The combo picker")
+		&& readSourceFile("Picker/PickerWindow.h").contains("showComboPickerWindow")
+		&& preferencesSource.contains("kKeyComboPickerShortcut"),
+		"release UI and documentation use Quick Search while internal picker identifiers remain compatible");
+
+	QString const currentProjectLinks = constantsSource + readRepositoryFile("README.md")
+		+ readRepositoryFile("SECURITY_MODEL.md") + readRepositoryFile("INSTALLER.md")
+		+ readRepositoryFile("Installer/LeanBeeftext.iss") + readRepositoryFile("Installer/StagePayload.ps1")
+		+ aboutSource + readSourceFile("Combo/ComboDialog.cpp") + readSourceFile("Combo/ComboDialog.ui")
+		+ readSourceFile("Combo/ComboImportDialog.ui") + appearanceUi
+		+ readRepositoryFile(".github/CONTRIBUTING.md");
+	expect(currentProjectLinks.contains("github.com/jubalslone/lean-beeftext")
+		&& !currentProjectLinks.contains("github.com/jubalslone/Beeftext")
+		&& currentProjectLinks.contains("github.com/xmichelo/Beeftext"),
+		"current Lean links use the canonical repository while upstream attribution remains unchanged");
 }
 
 
@@ -822,6 +846,11 @@ void testInstalledStorageAndMigrationSafety() {
     expect(!migration::cleanupAllowed(validation), "cleanup is refused until correspondence validation succeeds");
     validation.corresponds = true;
     expect(migration::cleanupAllowed(validation), "cleanup is allowed only after the full validation sequence");
+	expect(migration::installedCleanupPostconditionsMet(false, false)
+		&& !migration::installedCleanupPostconditionsMet(true, false)
+		&& !migration::installedCleanupPostconditionsMet(false, true)
+		&& !migration::installedCleanupPostconditionsMet(true, true),
+		"installed cleanup succeeds only when both the upstream executable and uninstall registration are absent");
     expect(migration::shouldRunMigration(false, false, migration::EState::NeverChecked)
         && !migration::shouldRunMigration(true, false, migration::EState::NeverChecked)
         && !migration::shouldRunMigration(false, true, migration::EState::NeverChecked)
@@ -829,11 +858,42 @@ void testInstalledStorageAndMigrationSafety() {
         "migration is installed-only, first-run, non-overwriting, and idempotent");
     expect(migrationSource.contains("migrateSource(selected, validation, error)")
         && migrationSource.contains("cleanupAllowed(validation)")
-		&& migrationSource.contains("safeRegisteredUninstallCommand(source)")
+		&& migrationSource.contains("safeRegisteredUninstallCommand(registeredSource)")
+		&& migrationSource.contains("waitForInstalledCleanupPostconditions(registeredSource)")
+		&& migrationSource.contains("uninstallRegistrationExists(registeredSource)")
+		&& !migrationSource.contains("GetExitCodeProcess")
         && migrationSource.contains("ImportCompleted")
         && migrationSource.indexOf("settings.setValue(kMigrationStateKey, int(migration::EState::ImportCompleted))")
             < migrationSource.indexOf("finishPendingCleanup(settings, false)"),
         "the runtime persists successful import state before cleanup so retries cannot re-import");
+	expect(migrationSource.contains("uninstallRegistryHive")
+		&& migrationSource.contains("uninstallRegistrySubkey")
+		&& migrationSource.contains("uninstallRegistryView")
+		&& migrationSource.contains("Unknown registration identity fails closed")
+		&& migrationSource.contains("remaining.append(value)"),
+		"installed cleanup records the exact uninstall entry and keeps failed postcondition checks pending");
+	expect(migrationSource.contains("Beeftext is currently running")
+		&& migrationSource.contains("Close Beeftext and continue")
+		&& migrationSource.contains("requestGracefulClose(source)")
+		&& migrationSource.contains("runningProcessesForExecutable(source.executablePath)")
+		&& migrationSource.contains("RmRegisterResources")
+		&& migrationSource.contains("RmShutdown(session, 0, nullptr)")
+		&& !migrationSource.contains("TerminateProcess")
+		&& !migrationSource.contains("RmForceShutdown")
+		&& migrationSource.contains("ERunningSourceDecision::Cancelled")
+		&& migrationSource.indexOf("closeRunningSourceWithConsent(sources[index])")
+			< migrationSource.indexOf("migrateSource(selected, validation, error)"),
+		"the exact running source is offered a consented graceful close before import without forced termination");
+	expect(migrationSource.contains("Import from Beeftext → Lean Beeftext"),
+		"the migration title shows the source-to-destination arrow");
+	qsizetype const cleanupStart = migrationSource.indexOf("bool cleanupSource(");
+	qsizetype const cleanupEnd = migrationSource.indexOf("bool finishPendingCleanup(", cleanupStart);
+	QString const cleanupImplementation = migrationSource.mid(cleanupStart, cleanupEnd - cleanupStart);
+	expect(cleanupStart >= 0 && cleanupEnd > cleanupStart
+		&& !cleanupImplementation.contains("beeftext.org/Beeftext")
+		&& !cleanupImplementation.contains("legacyDefaultComboFilePath")
+		&& !cleanupImplementation.contains("removeRecursively"),
+		"installed cleanup never deletes legacy upstream AppData");
     qsizetype const shallowStart = migrationSource.indexOf("QStringList const shallowRoots");
     qsizetype const shallowEnd = migrationSource.indexOf("for (qsizetype i = sources.size()", shallowStart);
     QString const shallowDiscovery = migrationSource.mid(shallowStart, shallowEnd - shallowStart);
@@ -888,7 +948,12 @@ void testInstallerArchitecture() {
         && installer.contains("newer version of Lean Beeftext")
         && installerDoc.contains("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"),
         "installer upgrades permit same-version reinstall, refuse downgrade, avoid force-closing, and document unattended use");
+	expect(installer.contains("[Messages]")
+		&& installer.contains("ConfirmUninstall=Are you sure you want to remove Lean Beeftext and its installed components?%n%nYour Lean Beeftext user data will not be removed.")
+		&& installer.contains("UninstalledAll=Lean Beeftext was successfully removed.%n%nYour user data was kept."),
+		"supported Inno messages explain that uninstall preserves Lean user data");
     expect(staging.contains("ValidateSet('Installed', 'Portable')")
+		&& staging.contains("[string]$Repository = 'jubalslone/lean-beeftext'")
         && staging.contains("Installed payload must not contain $beacon")
 		&& staging.contains("$checksumFullPath = [IO.Path]::GetFullPath($checksumPath)")
         && staging.contains("SHA256SUMS.txt")
@@ -899,6 +964,7 @@ void testInstallerArchitecture() {
         "obsolete NSIS entry points are retired");
     expect(workflow.contains("innosetup-7.1.0-x64.exe")
         && workflow.contains("0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f")
+		&& workflow.contains("Repository: jubalslone/lean-beeftext")
         && workflow.contains("-Mode Installed")
         && workflow.contains("-Mode Portable")
 		&& workflow.contains("$checksumFullPath = [IO.Path]::GetFullPath($checksumPath)")

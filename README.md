@@ -13,7 +13,7 @@ Lean Beeftext is built on a project we genuinely like. Beeftext provides a fast,
 Lean Beeftext supports:
 
 - Local text expansion
-- Groups, combo search, and the combo picker
+- Groups, in-window combo search, and Quick Search
 - Dates and times
 - Input prompts
 - Nested combos
@@ -36,6 +36,8 @@ Des Moines, IA 50309
 ```
 
 Save the combo, then type its keyword in a normal text field. Triggering can be automatic or manual, depending on your Preferences.
+
+**Search** (`Ctrl+F`) filters and manages combos in the main window. **Quick Search** uses its separate global shortcut to open a small searchable overlay while you work in another application, then inserts the combo you choose.
 
 ## Variables
 
@@ -118,7 +120,7 @@ The normal Windows installer installs Lean Beeftext under `Program Files\Lean Be
 
 Installed Lean Beeftext stores restorable user data in `Lean Beeftext` beneath the Windows Documents known folder, including `Settings.ini`, `comboList.json`, user translations/configuration, and migration recovery copies. If OneDrive Known Folder Move redirects Documents, that folder naturally follows the redirected Documents location; Lean Beeftext does not configure OneDrive. Diagnostic logs and last-use caches remain in Lean-specific LocalAppData to avoid unnecessary document-sync churn.
 
-On the first installed launch, Lean Beeftext can detect a registered upstream Beeftext installation or a strongly identified portable copy, import only combos and groups, verify the saved result, and then offer the recommended cleanup of the old application. Nothing is removed before a recovery snapshot, parse, atomic save, fresh reload, and content validation all succeed. Differing libraries are never silently merged.
+On the first installed launch, Lean Beeftext can detect a registered upstream Beeftext installation or a strongly identified portable copy, import only combos and groups, verify the saved result, and then offer the recommended cleanup of the old application. If the exact selected upstream copy is running, Lean can request a graceful close and continue the same migration; it never force-terminates the source. Nothing is removed before a recovery snapshot, parse, atomic save, fresh reload, and content validation all succeed. Installed cleanup is complete only after both the old executable and its exact uninstall registration are gone. Differing libraries are never silently merged, and legacy upstream AppData is preserved for recovery.
 
 Uninstall removes the application and its shortcuts but preserves the entire Documents data folder, so uninstalling and reinstalling does not discard user data.
 
@@ -173,4 +175,4 @@ ctest --test-dir build -C Release --output-on-failure
 
 The GitHub Actions Windows workflow performs the same configure, Release build, complete test run, clean-source checks, shared installed/portable staging, provenance recording, and packaged-file checksum generation. It compiles the installer, checks the installed payload cannot activate portable mode, and exercises silent install, same-version reinstall, and data-preserving uninstall. It produces both a portable QA artifact and `Lean-Beeftext-Setup-1.0.0.exe` from the exact same source commit.
 
-Project links: [repository](https://github.com/jubalslone/Beeftext), [issues](https://github.com/jubalslone/Beeftext/issues), and [releases](https://github.com/jubalslone/Beeftext/releases).
+Project links: [repository](https://github.com/jubalslone/lean-beeftext), [issues](https://github.com/jubalslone/lean-beeftext/issues), and [releases](https://github.com/jubalslone/lean-beeftext/releases).

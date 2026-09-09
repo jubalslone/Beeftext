@@ -204,13 +204,13 @@
       </size>
      </property>
      <property name="title">
-      <string>Picker window</string>
+      <string>Quick Search</string>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_5">
       <item>
        <widget class="QCheckBox" name="checkEnablePickerWindow">
         <property name="text">
-         <string>Enable picker window</string>
+         <string>Enable Quick Search</string>
         </property>
        </widget>
       </item>

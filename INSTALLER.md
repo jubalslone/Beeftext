@@ -43,7 +43,7 @@ Machine-local diagnostic and recency data is stored beneath the Windows LocalApp
 
 The publisher name is intentionally not part of this filesystem path. Lean Beeftext resolves the Windows `FOLDERID_LocalAppData` known folder and appends exactly `Lean Beeftext`.
 
-Uninstall removes the Program Files payload, shortcuts, and uninstall registration. It intentionally does not delete `<Documents>\Lean Beeftext`, so reinstalling does not lose combos, settings, or migration recovery copies.
+Uninstall removes the Program Files payload, shortcuts, and uninstall registration. Its confirmation and completion messages explicitly say that user data is kept. It intentionally does not delete `<Documents>\Lean Beeftext`, so reinstalling does not lose combos, settings, or migration recovery copies.
 
 ## Portable distribution
 
@@ -69,7 +69,7 @@ Inno Setup 7.1.0 is the pinned compiler for CI. A future already-elevated update
 Lean-Beeftext-Setup-1.0.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 ```
 
-Those switches do not bypass UAC. Same-version reinstall is permitted; downgrade is refused. The stable AppId enables in-place upgrades without uninstalling first. Inno Restart Manager support requests a normal application close and is configured not to force-close or unexpectedly relaunch Lean Beeftext.
+Those switches do not bypass UAC. Same-version reinstall is permitted; downgrade is refused. The stable AppId enables in-place upgrades without uninstalling first. Inno Restart Manager support requests a normal application close for an installed Lean instance and is configured not to force-close or unexpectedly relaunch Lean Beeftext. Setup cannot reliably discover an arbitrary portable executable path before staging, so users should close portable Lean Beeftext before installing; no process helper, service, or forced termination is added for that edge case.
 
 No network updater is implemented. A future updater is expected to download and cryptographically verify this same installer, obtain user approval, exit Lean Beeftext, run Setup, and relaunch Lean Beeftext.
 
@@ -81,4 +81,8 @@ A normal Lean portable fingerprint requires `LeanBeeftext.exe`, `Portable.bin`, 
 
 Only combos and groups are imported. Upstream and portable Lean preferences are not adopted. Differing legacy libraries are presented as separate choices; byte-identical libraries may be grouped. Source labels distinguish `Portable Beeftext` from `Portable Lean Beeftext`.
 
-The sequence is recovery snapshot, parse, safe conversion, atomic persistence, fresh reload, and normalized content/count comparison. Cleanup is unavailable until all steps succeed. Installed cleanup prefers a registered quiet uninstaller only when its executable is inside the verified upstream installation root; otherwise it uses an equally verified registered normal uninstaller, or declines automatic removal. Portable cleanup uses the Recycle Bin, revalidates the fingerprint and content digest, and refuses Desktop, Downloads, Documents, the user profile, drive roots, Program Files, Windows, the active application directory, and any folder not clearly dedicated to Beeftext. Cleanup state is persisted before cleanup begins, so retrying cleanup cannot duplicate imported combos.
+The sequence is recovery snapshot, parse, safe conversion, atomic persistence, fresh reload, and normalized content/count comparison. Cleanup is unavailable until all steps succeed. If the exact selected upstream executable is running, Lean offers to request a graceful close through Windows Restart Manager and continues the same migration only after that exact process exits; it never force-terminates a source process.
+
+Installed cleanup prefers a registered quiet uninstaller only when its executable is inside the verified upstream installation root; otherwise it uses an equally verified registered normal uninstaller, or declines automatic removal. The recorded registry hive, view, and subkey identify the exact uninstall entry. An uninstaller exit code is not treated as success: Lean waits briefly and requires both the original upstream executable and that exact uninstall entry to be gone. If either remains, imported Lean data stays intact and cleanup remains pending for a later retry. Legacy upstream user data under `%LOCALAPPDATA%\beeftext.org\Beeftext` is intentionally preserved as rollback/recovery material.
+
+Portable cleanup uses the Recycle Bin, revalidates the fingerprint and content digest, and refuses Desktop, Downloads, Documents, the user profile, drive roots, Program Files, Windows, the active application directory, and any folder not clearly dedicated to Beeftext. Cleanup state is persisted before cleanup begins, so retrying cleanup cannot duplicate imported combos.

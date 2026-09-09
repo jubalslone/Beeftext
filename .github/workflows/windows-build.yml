@@ -115,6 +115,7 @@ jobs:
             $buildInfo = Get-Content -LiteralPath (Join-Path $Path 'BUILD_INFO.txt') -Raw
             if ($buildInfo -notmatch '(?m)^Product: Lean Beeftext 1\.0\.0\r?$') { throw "$Mode product provenance is missing." }
             if ($buildInfo -notmatch "(?m)^Distribution: $Mode\r?$") { throw "$Mode distribution provenance is missing." }
+            if ($buildInfo -notmatch '(?m)^Repository: jubalslone/lean-beeftext\r?$') { throw "$Mode repository provenance is wrong." }
             if ($buildInfo -notmatch "(?m)^Source commit: $([regex]::Escape($commit))\r?$") { throw "$Mode source provenance is wrong." }
             $checksumPath = Join-Path $Path 'SHA256SUMS.txt'
             $checksumFullPath = [IO.Path]::GetFullPath($checksumPath)

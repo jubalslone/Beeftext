@@ -48,6 +48,7 @@ bool isRecognizableInstalledCandidate(QString const &displayName, QString const 
 	QString const &installLocation, QString const &executablePath); ///< Identify upstream without granting cleanup permission.
 bool installedMetadataIsConsistent(QString const &displayName, QString const &publisher, QString const &installLocation,
     QString const &uninstallCommand, QString const &executablePath); ///< Validate registered upstream uninstall metadata.
+bool installedCleanupPostconditionsMet(bool executableExists, bool uninstallRegistrationExists); ///< Require both installed traces to be gone.
 QList<QList<qsizetype>> groupSourcesByContent(QList<QByteArray> const &digests); ///< Group byte-identical source libraries.
 bool cleanupAllowed(ValidationResult const &result); ///< Gate all cleanup on the full import validation sequence.
 bool shouldRunMigration(bool portableMode, bool leanComboFileExists, EState state); ///< Installed first-run gating.
