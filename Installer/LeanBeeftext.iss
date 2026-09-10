@@ -61,6 +61,9 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch Lean Beeftext"; Flags: n
 [Code]
 const
 	LeanUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{499E5EE9-ECC6-455E-B78A-EDF581715A80}_is1';
+	LeanProcessNotRunning = 0;
+	LeanProcessRunning = 1;
+	LeanProcessStateUnknown = 2;
 
 function NextVersionPart(var Remaining: String): Integer;
 var
@@ -116,5 +119,75 @@ begin
 		MsgBox('A newer version of Lean Beeftext (' + InstalledVersion + ') is already installed. Setup will not downgrade it to {#MyAppVersion}.',
 			mbError, MB_OK);
 		Result := False;
+	end;
+end;
+
+{ XMiLib's single-instance key is implemented with QSharedMemory, not a Windows named mutex,
+  so Inno AppMutex cannot observe it. Query only the exact installed executable path instead. }
+function InstalledLeanProcessState(): Integer;
+var
+	Locator: Variant;
+	Services: Variant;
+	Processes: Variant;
+	Process: Variant;
+	ProcessPathValue: Variant;
+	ProcessPath: String;
+	ExpectedPath: String;
+	Index: Integer;
+begin
+	Result := LeanProcessStateUnknown;
+	ExpectedPath := ExpandConstant('{app}\{#MyAppExeName}');
+	try
+		Locator := CreateOleObject('WbemScripting.SWbemLocator');
+		Services := Locator.ConnectServer('.', 'root\CIMV2');
+		Processes := Services.ExecQuery(
+			'SELECT ExecutablePath FROM Win32_Process WHERE Name = ''{#MyAppExeName}''');
+		Result := LeanProcessNotRunning;
+		for Index := 0 to Processes.Count - 1 do
+		begin
+			Process := Processes.ItemIndex(Index);
+			ProcessPathValue := Process.ExecutablePath;
+			if VarIsNull(ProcessPathValue) then
+			begin
+				Log('Could not determine the full path of a running {#MyAppExeName}; uninstall fails closed.');
+				Result := LeanProcessStateUnknown;
+				exit;
+			end;
+			ProcessPath := ProcessPathValue;
+			if SameText(ProcessPath, ExpectedPath) then
+			begin
+				Result := LeanProcessRunning;
+				exit;
+			end;
+		end;
+	except
+		Log('Could not query running Lean Beeftext processes: ' + GetExceptionMessage);
+		Result := LeanProcessStateUnknown;
+	end;
+end;
+
+function InitializeUninstall(): Boolean;
+var
+	ProcessState: Integer;
+begin
+	Result := False;
+	while True do
+	begin
+		ProcessState := InstalledLeanProcessState();
+		if ProcessState = LeanProcessNotRunning then
+		begin
+			Result := True;
+			exit;
+		end;
+		if UninstallSilent() then
+		begin
+			Log('Silent uninstall aborted because the installed Lean Beeftext process is running or could not be checked safely.');
+			exit;
+		end;
+		if SuppressibleMsgBox(
+			'Lean Beeftext is currently running.' + #13#10 + #13#10 +
+			'Please close Lean Beeftext before uninstalling it.',
+			mbError, MB_RETRYCANCEL, IDCANCEL) <> IDRETRY then
+			exit;
 	end;
 end;

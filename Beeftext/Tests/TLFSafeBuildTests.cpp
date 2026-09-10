@@ -824,34 +824,13 @@ void testInstalledStorageAndMigrationSafety() {
 		&& migration::isBroadCleanupRoot(root.absolutePath(), { root.absolutePath() })
         && !migration::isBroadCleanupRoot(portable, { root.absolutePath() }),
         "broad protected roots are refused while a dedicated child folder is eligible");
-    QString const registeredUninstaller = QString("\"%1\"").arg(QDir(portable).absoluteFilePath("uninstall.exe"));
-	QString const outsideUninstaller = QString("\"%1\"").arg(root.absoluteFilePath("outside-uninstall.exe"));
 	expect(migration::isRecognizableInstalledCandidate("Beeftext", "Xavier Michelon", portable,
 		QDir(portable).absoluteFilePath("Beeftext.exe"))
 		&& !migration::isRecognizableInstalledCandidate("Lean Beeftext", "Jubal Slone", portable,
 			QDir(portable).absoluteFilePath("Beeftext.exe"))
-		&& migration::installedMetadataIsConsistent("Beeftext", "Xavier Michelon", portable,
-		registeredUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe"))
-        && !migration::installedMetadataIsConsistent("Lean Beeftext", "Jubal Slone", portable,
-			registeredUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe"))
-		&& !migration::installedMetadataIsConsistent("Beeftext", "Xavier Michelon", portable,
-			outsideUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe")),
-        "installed detection accepts upstream identity while cleanup also requires a matching uninstaller path");
-	QString const nsisUninstaller = QString("\"%1\" /S").arg(QDir(portable).absoluteFilePath("Uninstall.exe"));
-	QString nsisParameters;
-	expect(migration::buildVerifiedUpstreamNsisUninstallParameters("Beeftext", "beeftext.org", portable,
-		nsisUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe"), &nsisParameters)
-		&& nsisParameters == QString("/S _?=%1").arg(QDir::toNativeSeparators(QDir::cleanPath(portable)))
-		&& nsisParameters.endsWith(QDir::toNativeSeparators(QDir::cleanPath(portable)))
-		&& !migration::buildVerifiedUpstreamNsisUninstallParameters("Beeftext", "beeftext.org", portable,
-			QString("\"%1\" /S").arg(QDir(portable).absoluteFilePath("unins000.exe")),
-			QDir(portable).absoluteFilePath("Beeftext.exe"), &nsisParameters)
-		&& !migration::buildVerifiedUpstreamNsisUninstallParameters("Unrelated Tool", "Unknown", portable,
-			nsisUninstaller, QDir(portable).absoluteFilePath("Beeftext.exe"), &nsisParameters)
-		&& !migration::buildVerifiedUpstreamNsisUninstallParameters("Beeftext", "beeftext.org", portable,
-			nsisUninstaller + " _?=" + root.absolutePath(), QDir(portable).absoluteFilePath("Beeftext.exe"),
-			&nsisParameters),
-		"verified upstream NSIS invocation preserves arguments, appends the exact unquoted spaced root last, and rejects arbitrary or pre-overridden uninstallers");
+		&& !migration::isRecognizableInstalledCandidate("Beeftext", "Xavier Michelon", root.absolutePath(),
+			QDir(portable).absoluteFilePath("Beeftext.exe")),
+		"installed detection accepts exact upstream identity and rejects Lean or an executable outside the recorded root");
 
 	QByteArray const preCloseContents("digest A");
 	QByteArray const postCloseContents("digest B");
@@ -872,11 +851,6 @@ void testInstalledStorageAndMigrationSafety() {
     expect(!migration::cleanupAllowed(validation), "cleanup is refused until correspondence validation succeeds");
     validation.corresponds = true;
     expect(migration::cleanupAllowed(validation), "cleanup is allowed only after the full validation sequence");
-	expect(migration::installedCleanupPostconditionsMet(false, false)
-		&& !migration::installedCleanupPostconditionsMet(true, false)
-		&& !migration::installedCleanupPostconditionsMet(false, true)
-		&& !migration::installedCleanupPostconditionsMet(true, true),
-		"installed cleanup succeeds only when both the upstream executable and uninstall registration are absent");
     expect(migration::shouldRunMigration(false, false, migration::EState::NeverChecked)
         && !migration::shouldRunMigration(true, false, migration::EState::NeverChecked)
         && !migration::shouldRunMigration(false, true, migration::EState::NeverChecked)
@@ -884,51 +858,41 @@ void testInstalledStorageAndMigrationSafety() {
         "migration is installed-only, first-run, non-overwriting, and idempotent");
     expect(migrationSource.contains("migrateSource(selected, validation, error)")
         && migrationSource.contains("cleanupAllowed(validation)")
-		&& migrationSource.contains("safeRegisteredUninstallCommand(registeredSource, &commandStatus)")
-		&& migrationSource.contains("waitForInstalledCleanupPostconditions(registeredSource)")
-		&& migrationSource.contains("uninstallRegistrationExists(registeredSource)")
-		&& !migrationSource.contains("GetExitCodeProcess")
         && migrationSource.contains("ImportCompleted")
         && migrationSource.indexOf("settings.setValue(kMigrationStateKey, int(migration::EState::ImportCompleted))")
             < migrationSource.indexOf("finishPendingCleanup(settings, false)"),
-        "the runtime persists successful import state before cleanup so retries cannot re-import");
+		"the runtime validates installed migration and persists successful import state before portable cleanup so retries cannot re-import");
 	expect(migrationSource.contains("refreshSourceBeforeImport(sources[index], refreshed, refreshError)")
 		&& migrationSource.indexOf("refreshSourceBeforeImport(sources[index], refreshed, refreshError)")
 			< migrationSource.indexOf("migrateSource(selected, validation, error)")
 		&& migrationSource.contains("readSourceContentsMatchingDigest(source, sourceContents, outError)")
 		&& migrationSource.contains("writeRecoverySnapshot(source, sourceContents, snapshotFolder, outError)")
 		&& migrationSource.contains("QJsonDocument::fromJson(sourceContents")
-		&& migrationSource.contains("source.comboDigest != selected.comboDigest")
-		&& migrationSource.contains("source combo digest changed before cleanup"),
+		&& migrationSource.contains("source.comboDigest != selected.comboDigest"),
 		"selected sources refresh after graceful close and one digest-bound byte sequence drives snapshot, parse, import, and cleanup");
-	expect(migrationSource.contains("buildVerifiedUpstreamNsisUninstallParameters")
-		&& migrationSource.contains("ShellExecuteExW(&info)")
-		&& migrationSource.contains("WaitForSingleObject(info.hProcess, INFINITE)")
+	expect(!migrationSource.contains("UninstallString")
+		&& !migrationSource.contains("QuietUninstallString")
+		&& !migrationSource.contains("ShellExecuteExW")
+		&& !migrationSource.contains("_?=")
+		&& !migrationSource.contains("Remove the old Beeftext installation")
 		&& !migrationSource.contains("cmd.exe")
 		&& !migrationSource.contains("powershell", Qt::CaseInsensitive),
-		"verified NSIS cleanup uses direct process launch and real-process wait semantics without a shell");
+		"installed upstream migration exposes and executes no automatic uninstaller path or installed cleanup checkbox");
 	expect(migrationSource.contains("uninstallRegistryHive")
 		&& migrationSource.contains("uninstallRegistrySubkey")
 		&& migrationSource.contains("uninstallRegistryView")
-		&& migrationSource.contains("Unknown registration identity fails closed")
-		&& migrationSource.contains("remaining.append(value)"),
-		"installed cleanup records the exact uninstall entry and keeps failed postcondition checks pending");
-	expect(migrationSource.contains("cleanup was not selected")
-		&& migrationSource.contains("cleanupSafe is false")
-		&& migrationSource.contains("registered uninstall source could not be refreshed and revalidated")
-		&& migrationSource.contains("registered uninstall command could not be verified")
-		&& migrationSource.contains("registered uninstaller executable is missing")
-		&& migrationSource.contains("could not be launched")
-		&& migrationSource.contains("waiting for the registered uninstaller process failed")
-		&& migrationSource.contains("recorded upstream executable still exists after the cleanup timeout")
-		&& migrationSource.contains("recorded uninstall registry entry still exists after the cleanup timeout")
-		&& migrationSource.contains("cleanup succeeded")
-		&& migrationSource.contains("cleanup remains pending")
-		&& !migrationSource.contains("addInfo(sourceContents")
+		&& migrationSource.contains("refreshRegisteredInstalledSource")
+		&& migrationSource.contains("retired pre-release pending installed cleanup without invoking an upstream uninstaller")
+		&& migrationSource.contains("portablePending.append(value)")
+		&& !migrationSource.contains("object[\"uninstallRegistryHive\"] =")
+		&& !migrationSource.contains("object[\"uninstallRegistrySubkey\"] =")
+		&& !migrationSource.contains("object[\"uninstallRegistryView\"] ="),
+		"registry identity still refreshes the exact installed source while obsolete installed pending cleanup is retired and no longer serialized");
+	expect(!migrationSource.contains("addInfo(sourceContents")
 		&& !migrationSource.contains("addWarning(sourceContents")
 		&& !migrationSource.contains(".arg(sourceContents)")
 		&& !migrationSource.contains(".arg(contents)"),
-		"local diagnostics distinguish cleanup decisions and failures without logging combo contents");
+		"local diagnostics do not log combo contents");
 	expect(migrationSource.contains("Beeftext is currently running")
 		&& migrationSource.contains("Close Beeftext and continue")
 		&& migrationSource.contains("requestGracefulClose(source)")
@@ -943,14 +907,33 @@ void testInstalledStorageAndMigrationSafety() {
 		"the exact running source is offered a consented graceful close before import without forced termination");
 	expect(migrationSource.contains("Import from Beeftext → Lean Beeftext"),
 		"the migration title shows the source-to-destination arrow");
+	qsizetype const recommendationStart = migrationSource.indexOf("void showInstalledBeeftextRecommendation()");
+	qsizetype const recommendationEnd = migrationSource.indexOf("bool finishPendingCleanup(", recommendationStart);
+	QString const recommendationImplementation = migrationSource.mid(recommendationStart,
+		recommendationEnd - recommendationStart);
+	expect(recommendationStart >= 0 && recommendationEnd > recommendationStart
+		&& recommendationImplementation.contains("Beeftext is still installed")
+		&& recommendationImplementation.contains("We strongly recommend uninstalling Beeftext.")
+		&& recommendationImplementation.contains("Running Beeftext and Lean Beeftext at the same time")
+		&& !recommendationImplementation.contains("before continuing", Qt::CaseInsensitive)
+		&& recommendationImplementation.contains("Open Installed Apps")
+		&& recommendationImplementation.contains("prompt.setDefaultButton(openButton)")
+		&& recommendationImplementation.contains("QDesktopServices::openUrl(QUrl(\"ms-settings:appsfeatures\"))")
+		&& recommendationImplementation.contains("verified migration remains complete")
+		&& migrationSource.contains("if (importedFromInstalledBeeftext)")
+		&& migrationSource.lastIndexOf("showInstalledBeeftextRecommendation();")
+			> migrationSource.indexOf("migrateSource(selected, validation, error)"),
+		"successful installed migration recommends manual uninstall and opens Installed Apps directly without making Settings part of migration success");
 	qsizetype const cleanupStart = migrationSource.indexOf("bool cleanupSource(");
-	qsizetype const cleanupEnd = migrationSource.indexOf("bool finishPendingCleanup(", cleanupStart);
+	qsizetype const cleanupEnd = migrationSource.indexOf("bool installedSourceStillPresent(", cleanupStart);
 	QString const cleanupImplementation = migrationSource.mid(cleanupStart, cleanupEnd - cleanupStart);
 	expect(cleanupStart >= 0 && cleanupEnd > cleanupStart
+		&& cleanupImplementation.contains("source.type != migration::ESourceType::Portable")
 		&& !cleanupImplementation.contains("beeftext.org/Beeftext")
 		&& !cleanupImplementation.contains("legacyDefaultComboFilePath")
-		&& !cleanupImplementation.contains("removeRecursively"),
-		"installed cleanup never deletes legacy upstream AppData");
+		&& !cleanupImplementation.contains("removeRecursively")
+		&& !cleanupImplementation.contains("Uninstall"),
+		"cleanup is portable-only and never deletes legacy upstream AppData or invokes installed removal");
     qsizetype const shallowStart = migrationSource.indexOf("QStringList const shallowRoots");
     qsizetype const shallowEnd = migrationSource.indexOf("for (qsizetype i = sources.size()", shallowStart);
     QString const shallowDiscovery = migrationSource.mid(shallowStart, shallowEnd - shallowStart);
@@ -1004,18 +987,45 @@ void testInstallerArchitecture() {
         && installer.contains("CompareVersions")
         && installer.contains("newer version of Lean Beeftext")
         && installerDoc.contains("/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"),
-        "installer upgrades permit same-version reinstall, refuse downgrade, avoid force-closing, and document unattended use");
+		"installer upgrades permit same-version reinstall, refuse downgrade, avoid force-closing, and document unattended use");
+	QString const singleInstanceSource = readRepositoryFile("Submodules/XMiLib/XMiLib/SingleInstanceApp.cpp");
+	expect(singleInstanceSource.contains("QSharedMemory") ||
+		readRepositoryFile("Submodules/XMiLib/XMiLib/SingleInstanceApp.h").contains("QSharedMemory"),
+		"the XMiLib single-instance implementation is verified as Qt shared memory rather than an assumed Windows mutex");
+	expect(!installer.contains("AppMutex=")
+		&& installer.contains("WbemScripting.SWbemLocator")
+		&& installer.contains("SELECT ExecutablePath FROM Win32_Process")
+		&& installer.contains("SameText(ProcessPath, ExpectedPath)")
+		&& installer.contains("function InitializeUninstall(): Boolean")
+		&& installer.contains("UninstallSilent()")
+		&& installer.contains("SuppressibleMsgBox(")
+		&& installer.contains("MB_RETRYCANCEL, IDCANCEL")
+		&& installer.contains("Please close Lean Beeftext before uninstalling it.")
+		&& !installer.contains("TerminateProcess")
+		&& !installer.contains("taskkill", Qt::CaseInsensitive),
+		"Lean uninstall checks the exact installed executable path, offers Retry/Cancel, aborts silently, and never force-terminates");
 	expect(installer.contains("[Messages]")
 		&& installer.contains("ConfirmUninstall=Are you sure you want to remove Lean Beeftext and its installed components?%n%nYour Lean Beeftext user data will not be removed.")
 		&& installer.contains("UninstalledAll=Lean Beeftext was successfully removed.%n%nYour user data was kept."),
 		"supported Inno messages explain that uninstall preserves Lean user data");
-    expect(staging.contains("ValidateSet('Installed', 'Portable')")
-		&& staging.contains("[string]$Repository = 'jubalslone/lean-beeftext'")
-        && staging.contains("Installed payload must not contain $beacon")
-		&& staging.contains("$checksumFullPath = [IO.Path]::GetFullPath($checksumPath)")
+	expect(staging.contains("ValidateSet('Installed', 'Portable')")
+			&& staging.contains("[string]$Repository = 'jubalslone/lean-beeftext'")
+	        && staging.contains("Installed payload must not contain $beacon")
+			&& staging.contains("MSVC runtime DLLs already staged by windeployqt")
+			&& staging.contains("MSVC runtime DLLs added by explicit copy")
+			&& staging.contains("$checksumFullPath = [IO.Path]::GetFullPath($checksumPath)")
         && staging.contains("SHA256SUMS.txt")
         && staging.contains("BUILD_INFO.txt"),
-        "one staging script builds isolated installed and portable payloads with provenance manifests");
+		"one staging script builds isolated installed and portable payloads with provenance manifests");
+	expect(workflow.contains("Forbidden development/debug payload file")
+		&& workflow.contains("Unexpected executable")
+		&& workflow.contains("Qt debug DLL")
+		&& workflow.contains("MSVCP140.dll")
+		&& workflow.contains("VCRUNTIME140.dll")
+		&& workflow.contains("VCRUNTIME140_1.dll")
+		&& workflow.contains("Silent uninstall proceeded while the exact installed Lean process path was running")
+		&& workflow.contains("Bounded running-process fixture did not exit normally"),
+		"Windows CI rejects debug/development payloads, verifies runtimes, and exercises fail-closed silent uninstall");
     expect(!QFileInfo(QDir(QStringLiteral(BEEFTEXT_SOURCE_DIR)).absoluteFilePath("../Installer/installer.nsi")).exists()
         && !QFileInfo(QDir(QStringLiteral(BEEFTEXT_SOURCE_DIR)).absoluteFilePath("../Installer/BuildAll.ps1")).exists(),
         "obsolete NSIS entry points are retired");

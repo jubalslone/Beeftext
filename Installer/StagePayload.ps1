@@ -61,7 +61,16 @@ $crtDirectory = Get-ChildItem -Path (Join-Path $redistVersion.FullName 'x64') -D
 if (-not $crtDirectory) {
 	throw 'Could not locate the x64 Visual C++ runtime directory.'
 }
+$crtDlls = @(Get-ChildItem -Path $crtDirectory.FullName -File -Filter '*.dll')
+$crtPresentBeforeExplicitCopy = @($crtDlls | Where-Object {
+	Test-Path -LiteralPath (Join-Path $Destination $_.Name) -PathType Leaf
+} | ForEach-Object Name)
 Copy-Item -Path (Join-Path $crtDirectory.FullName '*.dll') -Destination $Destination
+$crtAddedByExplicitCopy = @($crtDlls | Where-Object {
+	$crtPresentBeforeExplicitCopy -notcontains $_.Name
+} | ForEach-Object Name)
+Write-Output "MSVC runtime DLLs already staged by windeployqt: $($crtPresentBeforeExplicitCopy -join ', ')"
+Write-Output "MSVC runtime DLLs added by explicit copy: $($crtAddedByExplicitCopy -join ', ')"
 
 foreach ($runtimeDll in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
 	if (-not (Test-Path -LiteralPath (Join-Path $Destination $runtimeDll))) {
