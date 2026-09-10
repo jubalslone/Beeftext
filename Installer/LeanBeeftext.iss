@@ -40,6 +40,12 @@ VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} installer
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}
+#ifdef ProductionSigning
+; Inno's documented SignTool path signs both Setup and the generated uninstaller.
+; The production workflow supplies the named tool through ISCC --signtool.
+SignTool=leanartifact
+SignedUninstaller=yes
+#endif
 
 [Messages]
 ConfirmUninstall=Are you sure you want to remove Lean Beeftext and its installed components?%n%nYour Lean Beeftext user data will not be removed.

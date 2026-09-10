@@ -136,7 +136,7 @@ This is a design boundary, not a claim of formal certification or absolute secur
 
 ## Project Status
 
-Lean Beeftext 1.0.0 is based on Beeftext 16.0. Functional Windows QA covers the restricted substitution model, multiline modes, combo portability, portable isolation, and the current Windows user interface. The repository now builds both a normal Inno Setup installer and a portable package from the same tested commit. Network updater implementation and release signing remain future hardening work.
+Lean Beeftext 1.0.0 is based on Beeftext 16.0. Functional Windows QA covers the restricted substitution model, multiline modes, combo portability, portable isolation, and the current Windows user interface. The repository builds both a normal Inno Setup installer and a portable package from the same tested commit. A protected manual workflow can build signed production candidates for further QA; no public signed 1.0.0 release or network updater exists yet.
 
 ## Upstream Project
 

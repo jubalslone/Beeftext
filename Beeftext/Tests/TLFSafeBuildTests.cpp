@@ -1045,6 +1045,84 @@ void testInstallerArchitecture() {
         "installed locations, OneDrive redirection, and uninstall preservation are documented");
 }
 
+void testProductionSigningArchitecture() {
+	QString const production = readRepositoryFile(".github/workflows/artifact-signing-release.yml");
+	QString const smoke = readRepositoryFile(".github/workflows/azure-signing-smoke-test.yml");
+	QString const installer = readRepositoryFile("Installer/LeanBeeftext.iss");
+	QString const wrapper = readRepositoryFile("Installer/Invoke-ArtifactSigning.ps1");
+	QString const signingDoc = readRepositoryFile("ARTIFACT_SIGNING.md");
+	QString const routineWorkflow = readRepositoryFile(".github/workflows/windows-build.yml");
+
+	expect(production.contains("workflow_dispatch:")
+		&& !production.contains("pull_request:")
+		&& !production.contains("\n  push:")
+		&& !production.contains("\n  release:")
+		&& production.contains("source_commit:")
+		&& production.contains("^[0-9a-f]{40}$")
+		&& production.contains("ref: ${{ inputs.source_commit }}")
+		&& production.contains("persist-credentials: false"),
+		"production signing is manual-only and checks out one explicit reviewed commit without persisted credentials");
+	expect(production.contains("contents: read")
+		&& production.contains("id-token: write")
+		&& production.contains("environment: production-signing")
+		&& production.contains("azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906")
+		&& production.contains("Azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82")
+		&& production.contains("exclude-environment-credential: true")
+		&& !production.contains("AZURE_CLIENT_SECRET"),
+		"production signing uses the protected environment and pinned GitHub OIDC actions without a client secret");
+	expect(smoke.contains("workflow_dispatch:")
+		&& smoke.contains("Azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82"),
+		"the successful manual smoke-test reference remains in the repository");
+
+	expect(installer.contains("#ifdef ProductionSigning")
+		&& installer.contains("SignTool=leanartifact")
+		&& installer.contains("SignedUninstaller=yes")
+		&& production.contains("--define=ProductionSigning")
+		&& production.contains("--signtool=leanartifact=$signToolCommand")
+		&& !routineWorkflow.contains("--define=ProductionSigning"),
+		"Inno's documented signing integration is enabled only for the production installer and generated uninstaller");
+	expect(wrapper.contains("[string]$FilePath")
+		&& wrapper.contains("IndexOfAny([char[]]'*?')")
+		&& wrapper.contains("Resolve-Path -LiteralPath")
+		&& wrapper.contains("$target.Extension -ieq '.exe'")
+		&& wrapper.contains("ArtifactSigning PowerShell module 0.1.8")
+		&& wrapper.contains("Invoke-ArtifactSigning @signingParameters")
+		&& wrapper.contains("ExcludeAzurePowerShellCredential = $true")
+		&& !wrapper.contains("ExcludeAzureCliCredential = $true"),
+		"the Inno bridge signs one explicit executable through the pinned module and OIDC-backed Azure CLI credential");
+	expect(wrapper.contains("FileDigest = 'SHA256'")
+		&& wrapper.contains("TimestampRfc3161 = 'http://timestamp.acs.microsoft.com'")
+		&& wrapper.contains("TimestampDigest = 'SHA256'")
+		&& wrapper.contains("$signature.Status -ne 'Valid'")
+		&& wrapper.contains("$signature.SignerCertificate")
+		&& wrapper.contains("$signature.TimeStamperCertificate"),
+		"the signing bridge requires SHA-256 Authenticode plus a valid RFC 3161 timestamp");
+
+	qsizetype const appSign = production.indexOf("Sign the one LeanBeeftext executable");
+	qsizetype const portableFinalize = production.indexOf("reuse it for portable");
+	qsizetype const innoBuild = production.indexOf("Compile and Authenticode-sign installer");
+	qsizetype const installedVerification = production.indexOf("Assert-InstalledSignatures");
+	qsizetype const finalHashes = production.indexOf("Generate final signed-candidate hashes");
+	expect(appSign >= 0 && portableFinalize > appSign && innoBuild > portableFinalize
+		&& installedVerification > innoBuild && finalHashes > installedVerification,
+		"production ordering signs the app before portable packaging, then signs Inno outputs, verifies the deployed uninstaller, and hashes final bytes");
+	expect(production.contains("Portable packaging does not contain the exact signed installed executable bytes.")
+		&& production.contains("Installed LeanBeeftext.exe differs from the signed staged executable.")
+		&& production.contains("has no RFC 3161 timestamp certificate")
+		&& production.contains("signer subject does not match the signed app identity")
+		&& production.contains("DISTRIBUTION_SHA256SUMS.txt")
+		&& production.contains("PRODUCTION_SIGNING_REPORT.txt")
+		&& production.contains("Lean-Beeftext-1.0.0-signed-portable-windows-x64")
+		&& production.contains("Lean-Beeftext-1.0.0-signed-installer"),
+		"the signed candidate fails closed on missing identity/timestamps and publishes only private QA artifacts with final hashes and provenance");
+	expect(signingDoc.contains("generated uninstaller")
+		&& signingDoc.contains("final `Lean-Beeftext-Setup-1.0.0.exe` installer")
+		&& signingDoc.contains("GitHub's short-lived OIDC identity")
+		&& signingDoc.contains("does not re-sign Qt")
+		&& signingDoc.contains("does not guarantee that Microsoft Defender SmartScreen will never warn"),
+		"signing documentation states the three-file scope, short-lived authentication, third-party boundary, and SmartScreen limitation");
+}
+
 
 } // anonymous namespace
 
@@ -1063,6 +1141,7 @@ int main(int argc, char *argv[]) {
 	testProductFinishingSurface();
     testInstalledStorageAndMigrationSafety();
     testInstallerArchitecture();
+	testProductionSigningArchitecture();
     if (failureCount == 0)
         qInfo() << "All Lean Beeftext security-model tests passed.";
     return failureCount == 0 ? 0 : 1;
