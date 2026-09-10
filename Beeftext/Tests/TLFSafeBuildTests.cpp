@@ -828,7 +828,7 @@ void testInstalledStorageAndMigrationSafety() {
 		QDir(portable).absoluteFilePath("Beeftext.exe"))
 		&& !migration::isRecognizableInstalledCandidate("Lean Beeftext", "Jubal Slone", portable,
 			QDir(portable).absoluteFilePath("Beeftext.exe"))
-		&& !migration::isRecognizableInstalledCandidate("Beeftext", "Xavier Michelon", root.absolutePath(),
+		&& !migration::isRecognizableInstalledCandidate("Beeftext", "Xavier Michelon", leanPortable,
 			QDir(portable).absoluteFilePath("Beeftext.exe")),
 		"installed detection accepts exact upstream identity and rejects Lean or an executable outside the recorded root");
 
