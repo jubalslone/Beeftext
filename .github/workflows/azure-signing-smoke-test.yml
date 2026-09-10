@@ -1,6 +1,9 @@
 name: Azure signing smoke test
 
 on:
+  push:
+    branches:
+      - agent/tlf-safe-build
   workflow_dispatch:
 
 permissions:
