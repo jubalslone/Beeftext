@@ -69,4 +69,8 @@ The manual `Azure signing smoke test` retains the known-good direct Microsoft ac
 
 Authenticode gives Windows verifiable publisher identity and protects signed-file integrity. The timestamp allows Windows to evaluate a signature after the short-lived signing certificate expires. It does not prove that the application is secure, and it does not guarantee that Microsoft Defender SmartScreen will never warn; reputation can still take time to develop.
 
-This candidate workflow uploads private CI artifacts for manual QA. It does not create a GitHub Release or otherwise publish them as a final 1.0.0 release.
+## Release publication
+
+The production-signing workflow stops at private CI artifacts for manual QA. Publishing a GitHub Release is a separate maintainer action after the candidate has passed real-Windows testing. Final release publication must reuse the verified candidate bytes rather than rebuild, re-sign, or recompress them.
+
+Lean Beeftext 1.0.0 followed that process: the public installer and portable ZIP were copied byte-for-byte from the successful production candidate built from commit `41354eafcfa3c7406f3f1e72b65e26742288b51f`. The public release is available at [Lean Beeftext 1.0.0](https://github.com/jubalslone/lean-beeftext/releases/tag/1.0.0), where the published SHA-256 values can be compared with the production-candidate provenance.
