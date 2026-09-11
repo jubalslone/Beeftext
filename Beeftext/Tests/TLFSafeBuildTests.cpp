@@ -1050,6 +1050,8 @@ void testProductionSigningArchitecture() {
 	QString const smoke = readRepositoryFile(".github/workflows/azure-signing-smoke-test.yml");
 	QString const installer = readRepositoryFile("Installer/LeanBeeftext.iss");
 	QString const wrapper = readRepositoryFile("Installer/Invoke-ArtifactSigning.ps1");
+	QString const smokeInstaller = readRepositoryFile("Installer/SigningBridgeSmoke.iss");
+	QString const parser = readRepositoryFile("Scripts/PowerShell/TestTrackedPowerShellSyntax.ps1");
 	QString const signingDoc = readRepositoryFile("ARTIFACT_SIGNING.md");
 	QString const routineWorkflow = readRepositoryFile(".github/workflows/windows-build.yml");
 
@@ -1071,8 +1073,9 @@ void testProductionSigningArchitecture() {
 		&& !production.contains("AZURE_CLIENT_SECRET"),
 		"production signing uses the protected environment and pinned GitHub OIDC actions without a client secret");
 	expect(smoke.contains("workflow_dispatch:")
-		&& smoke.contains("Azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82"),
-		"the successful manual smoke-test reference remains in the repository");
+		&& smoke.contains("Azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82")
+		&& smoke.contains("Installer/SigningBridgeSmoke.iss"),
+		"the manual smoke retains the direct action baseline and adds the repository Inno bridge");
 
 	expect(installer.contains("#ifdef ProductionSigning")
 		&& installer.contains("SignTool=leanartifact")
@@ -1083,24 +1086,57 @@ void testProductionSigningArchitecture() {
 		"Inno's documented signing integration is enabled only for the production installer and generated uninstaller");
 	expect(production.contains("$wrapper = (Resolve-Path ./Installer/Invoke-ArtifactSigning.ps1).Path")
 		&& production.contains("-File `$q$wrapper`$q -FilePath `$f")
-		&& !production.contains("-File `\"$wrapper`\" -FilePath `$f"),
-		"the command-line Inno SignTool uses literal $q delimiters for the wrapper and literal $f for its quoted target");
+		&& smoke.contains("$wrapper = (Resolve-Path ./Installer/Invoke-ArtifactSigning.ps1).Path")
+		&& smoke.contains("-File `$q$wrapper`$q -FilePath `$f")
+		&& !production.contains("-File `\"$wrapper`\" -FilePath `$f")
+		&& !smoke.contains("-File `\"$wrapper`\" -FilePath `$f"),
+		"production and smoke give Inno literal $q wrapper delimiters and literal $f for its quoted target");
 	expect(wrapper.contains("[string]$FilePath")
 		&& wrapper.contains("IndexOfAny([char[]]'*?')")
 		&& wrapper.contains("Resolve-Path -LiteralPath")
-		&& wrapper.contains("$target.Extension -ieq '.exe'")
+		&& wrapper.contains("$target -isnot [IO.FileInfo]")
+		&& wrapper.contains("Join-Path $PSScriptRoot '_output'")
+		&& wrapper.contains("[StringComparer]::OrdinalIgnoreCase.Equals")
+		&& wrapper.contains("[IO.FileAttributes]::ReparsePoint")
+		&& wrapper.contains("Test-WindowsPeFile")
+		&& wrapper.contains("$reader.ReadUInt16() -ne 0x5a4d")
+		&& wrapper.contains("$reader.ReadUInt32() -eq 0x00004550")
+		&& !wrapper.contains("$target.Extension -ieq '.exe'")
+		&& wrapper.contains("Authenticode verification failed for ${targetPath}:")
 		&& wrapper.contains("ArtifactSigning PowerShell module 0.1.8")
 		&& wrapper.contains("Invoke-ArtifactSigning @signingParameters")
 		&& wrapper.contains("ExcludeAzurePowerShellCredential = $true")
 		&& !wrapper.contains("ExcludeAzureCliCredential = $true"),
-		"the Inno bridge signs one explicit executable through the pinned module and OIDC-backed Azure CLI credential");
+		"the Inno bridge signs one explicit PE inside Installer/_output through the pinned module and OIDC-backed Azure CLI credential");
 	expect(wrapper.contains("FileDigest = 'SHA256'")
 		&& wrapper.contains("TimestampRfc3161 = 'http://timestamp.acs.microsoft.com'")
 		&& wrapper.contains("TimestampDigest = 'SHA256'")
+		&& wrapper.contains("Refusing to add another signature to an already valid target")
+		&& wrapper.contains("Artifact Signing did not change the target bytes")
 		&& wrapper.contains("$signature.Status -ne 'Valid'")
 		&& wrapper.contains("$signature.SignerCertificate")
 		&& wrapper.contains("$signature.TimeStamperCertificate"),
 		"the signing bridge requires SHA-256 Authenticode plus a valid RFC 3161 timestamp");
+	expect(parser.contains("git ls-files -- '*.ps1'")
+		&& parser.contains("[System.Management.Automation.Language.Parser]::ParseFile(")
+		&& parser.contains("$failures.Count -ne 0")
+		&& routineWorkflow.contains("./Scripts/PowerShell/TestTrackedPowerShellSyntax.ps1")
+		&& production.contains("./Scripts/PowerShell/TestTrackedPowerShellSyntax.ps1")
+		&& smoke.contains("./Scripts/PowerShell/TestTrackedPowerShellSyntax.ps1")
+		&& production.indexOf("Parse all tracked PowerShell scripts before Azure authentication")
+			< production.indexOf("Azure login with GitHub OIDC")
+		&& smoke.indexOf("Parse all tracked PowerShell scripts before Azure authentication")
+			< smoke.indexOf("Azure login with OIDC"),
+		"routine, production, and smoke CI parse every tracked PowerShell script before signing authentication");
+	expect(smokeInstaller.contains("AppId={{D23051DC-AC48-4B3F-9409-7373B299397D}")
+		&& smokeInstaller.contains("OutputDir=_output")
+		&& smokeInstaller.contains("SignTool=leanartifact")
+		&& smokeInstaller.contains("SignedUninstaller=yes")
+		&& smoke.contains("innosetup-7.1.0-x64.exe")
+		&& smoke.contains("0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f")
+		&& smoke.contains("Get-VerifiedSignature $uninstaller")
+		&& smoke.contains("Disposable smoke uninstall registration survived uninstall."),
+		"the disposable smoke compiles, signs, installs, verifies, and removes an isolated Inno installer and uninstaller");
 
 	qsizetype const appSign = production.indexOf("Sign the one LeanBeeftext executable");
 	qsizetype const portableFinalize = production.indexOf("reuse it for portable");

@@ -6,6 +6,46 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+function Test-WindowsPeFile {
+	param(
+		[Parameter(Mandatory = $true)]
+		[string]$Path
+	)
+
+	$stream = [IO.File]::Open(
+		$Path,
+		[IO.FileMode]::Open,
+		[IO.FileAccess]::Read,
+		[IO.FileShare]::Read)
+	try {
+		if ($stream.Length -lt 64) {
+			return $false
+		}
+
+		$reader = [IO.BinaryReader]::new($stream)
+		try {
+			if ($reader.ReadUInt16() -ne 0x5a4d) {
+				return $false
+			}
+
+			$stream.Position = 0x3c
+			$peOffset = $reader.ReadInt32()
+			if ($peOffset -lt 64 -or $peOffset -gt ($stream.Length - 4)) {
+				return $false
+			}
+
+			$stream.Position = $peOffset
+			return $reader.ReadUInt32() -eq 0x00004550
+		}
+		finally {
+			$reader.Dispose()
+		}
+	}
+	finally {
+		$stream.Dispose()
+	}
+}
+
 if ($FilePath.IndexOfAny([char[]]'*?') -ge 0) {
 	throw 'The signing target must be one explicit file path; wildcards are not allowed.'
 }
@@ -15,12 +55,38 @@ if ($resolvedPaths.Count -ne 1) {
 	throw "The signing target did not resolve to exactly one path: $FilePath"
 }
 
-$target = Get-Item -LiteralPath $resolvedPaths[0].Path -Force
-if (-not $target.PSIsContainer -and $target.Extension -ieq '.exe') {
-	$targetPath = $target.FullName
+$resolvedPath = $resolvedPaths[0]
+if ($resolvedPath.Provider.Name -cne 'FileSystem') {
+	throw "The signing target must be a file-system path: $FilePath"
 }
-else {
-	throw "The signing target must be one existing .exe file: $FilePath"
+
+$target = Get-Item -LiteralPath $resolvedPath.Path -Force -ErrorAction Stop
+if ($target -isnot [IO.FileInfo] -or $target.PSIsContainer) {
+	throw "The signing target must be one existing regular file: $FilePath"
+}
+
+$installerDirectory = Get-Item -LiteralPath $PSScriptRoot -Force -ErrorAction Stop
+$expectedOutputPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '_output'))
+$expectedOutput = Get-Item -LiteralPath $expectedOutputPath -Force -ErrorAction Stop
+foreach ($item in @($installerDirectory, $expectedOutput, $target)) {
+	$linkType = $item.PSObject.Properties['LinkType']
+	if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or
+		($null -ne $linkType -and -not [string]::IsNullOrWhiteSpace([string]$linkType.Value))) {
+		throw "Signing paths must not contain reparse points or links: $($item.FullName)"
+	}
+}
+if ($expectedOutput -isnot [IO.DirectoryInfo]) {
+	throw "The dedicated Inno output path is not a directory: $expectedOutputPath"
+}
+
+$targetPath = [IO.Path]::GetFullPath($target.FullName)
+$canonicalOutputPath = [IO.Path]::GetFullPath($expectedOutput.FullName)
+$targetParentPath = [IO.Path]::GetFullPath($target.DirectoryName)
+if (-not [StringComparer]::OrdinalIgnoreCase.Equals($targetParentPath, $canonicalOutputPath)) {
+	throw "The signing target must be directly inside the dedicated Inno output directory: $targetPath"
+}
+if (-not (Test-WindowsPeFile -Path $targetPath)) {
+	throw "The signing target is not a Windows PE file: $targetPath"
 }
 
 foreach ($name in @(
@@ -77,7 +143,7 @@ if ($afterHash -eq $beforeHash) {
 
 $signature = Get-AuthenticodeSignature -LiteralPath $targetPath
 if ($signature.Status -ne 'Valid') {
-	throw "Authenticode verification failed for $targetPath: $($signature.Status)"
+	throw "Authenticode verification failed for ${targetPath}: $($signature.Status)"
 }
 if (-not $signature.SignerCertificate) {
 	throw "Authenticode verification found no signer certificate: $targetPath"
