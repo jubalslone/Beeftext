@@ -40,6 +40,7 @@ private slots:
     void onUpdateCheckFailed(); ///< Slot update check failure
     void onCheckAutoCheckForUpdates(bool checked) const; ///< Slot for the 'Auto check for updated' checkbox.
     void onCheckAutoStart(bool checked) const; ///< Slot for the 'Auto start at login' checkbox.
+    void onAllowRealLineBreaksChanged(bool checked) const; ///< Slot for the restricted multiline preference.
     void onCheckPlaySoundOnCombo(bool checked) const; ///< Slot for the  'Play sound on combo' checkbox.
     void onCheckUseCustomSound(bool checked) const; ///< Slot for the 'Use custom sound' checkbox.
     void onChangeCustomSound() const; ///< Slot for the 'Change custom sound' button.

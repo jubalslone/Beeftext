@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(Beeftext VERSION 14.0 LANGUAGES CXX)
+project(Beeftext VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -42,7 +42,7 @@ add_custom_target(translations
    powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -command \"${TRANS_SRC_DIR} ${TRANS_DST_DIR}\" >NUL
 )
 
-add_executable(Beeftext
+add_executable(Beeftext WIN32
    AutoStart.cpp
    AutoStart.h
    BeeftextConstants.cpp
@@ -72,13 +72,12 @@ add_executable(Beeftext
    stdafx.h
    Theme.cpp
    Theme.h
+   TLFSafeBuild.cpp
+   TLFSafeBuild.h
    WaveSound.cpp
    WaveSound.h
    Backup/BackupManager.cpp
    Backup/BackupManager.h
-   Backup/BackupRestoreDialog.cpp
-   Backup/BackupRestoreDialog.h
-   Backup/BackupRestoreDialog.ui
    Clipboard/ClipboardManager.cpp
    Clipboard/ClipboardManager.h
    Clipboard/ClipboardManagerDefault.cpp
@@ -94,6 +93,8 @@ add_executable(Beeftext
    Combo/ComboDialog.ui
    Combo/ComboEditor.cpp
    Combo/ComboEditor.h
+   Combo/ComboExportDialog.cpp
+   Combo/ComboExportDialog.h
    Combo/ComboFrame.cpp
    Combo/ComboFrame.h
    Combo/ComboFrame.ui
@@ -106,6 +107,8 @@ add_executable(Beeftext
    Combo/ComboList.h
    Combo/ComboManager.cpp
    Combo/ComboManager.h
+   Combo/ComboPortability.cpp
+   Combo/ComboPortability.h
    Combo/ComboSortFilterProxyModel.cpp
    Combo/ComboSortFilterProxyModel.h
    Combo/ComboTableWidget.cpp
@@ -145,6 +148,10 @@ add_executable(Beeftext
    LastUse/ComboLastUseFile.h
    LastUse/EmojiLastUseFile.cpp
    LastUse/EmojiLastUseFile.h
+   Migration/LegacyMigrationCore.cpp
+   Migration/LegacyMigrationCore.h
+   Migration/LegacyMigrationManager.cpp
+   Migration/LegacyMigrationManager.h
    Picker/PickerItemDelegate.cpp
    Picker/PickerItemDelegate.h
    Picker/PickerModel.cpp
@@ -207,3 +214,22 @@ target_link_libraries(Beeftext Qt6::Widgets)
 target_link_libraries(Beeftext Qt6::Network)
 target_link_libraries(Beeftext XMiLib)
 target_link_libraries(Beeftext Winmm)
+target_link_libraries(Beeftext Shell32)
+target_link_libraries(Beeftext Ole32)
+target_link_libraries(Beeftext Rstrtmgr)
+
+if(BUILD_TESTING)
+   add_executable(LeanSecurityModelTests
+      Tests/TLFSafeBuildTests.cpp
+      TLFSafeBuild.cpp
+      TLFSafeBuild.h
+      Combo/ComboPortability.cpp
+      Combo/ComboPortability.h
+      Migration/LegacyMigrationCore.cpp
+      Migration/LegacyMigrationCore.h
+   )
+   target_link_libraries(LeanSecurityModelTests Qt6::Core)
+   target_link_libraries(LeanSecurityModelTests XMiLib)
+   target_compile_definitions(LeanSecurityModelTests PRIVATE BEEFTEXT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+   add_test(NAME LeanSecurityModelTests COMMAND LeanSecurityModelTests)
+endif()

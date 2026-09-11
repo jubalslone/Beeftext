@@ -87,6 +87,12 @@
     <ClCompile Include="Combo\ComboImportDialog.cpp">
       <Filter>Combo</Filter>
     </ClCompile>
+    <ClCompile Include="Combo\ComboExportDialog.cpp">
+      <Filter>Combo</Filter>
+    </ClCompile>
+    <ClCompile Include="Combo\ComboPortability.cpp">
+      <Filter>Combo</Filter>
+    </ClCompile>
     <ClCompile Include="Combo\ComboKeywordValidator.cpp">
       <Filter>Combo</Filter>
     </ClCompile>
@@ -113,9 +119,6 @@
     </ClCompile>
     <ClCompile Include="MimeDataUtils.cpp" />
     <ClCompile Include="Backup\BackupManager.cpp">
-      <Filter>Backup</Filter>
-    </ClCompile>
-    <ClCompile Include="Backup\BackupRestoreDialog.cpp">
       <Filter>Backup</Filter>
     </ClCompile>
     <ClCompile Include="Update\UpdateManager.cpp">
@@ -223,6 +226,8 @@
       <Filter>Snippet</Filter>
     </ClCompile>
     <ClCompile Include="KeyboardMapper.cpp" />
+    <ClCompile Include="Migration\LegacyMigrationCore.cpp" />
+    <ClCompile Include="Migration\LegacyMigrationManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h" />
@@ -251,6 +256,8 @@
       <Filter>Combo</Filter>
     </ClInclude>
     <ClInclude Include="WaveSound.h" />
+    <ClInclude Include="Migration\LegacyMigrationCore.h" />
+    <ClInclude Include="Migration\LegacyMigrationManager.h" />
     <ClInclude Include="Combo\CaseSensitivity.h">
       <Filter>Combo</Filter>
     </ClInclude>
@@ -327,6 +334,12 @@
     <QtMoc Include="Combo\ComboImportDialog.h">
       <Filter>Combo</Filter>
     </QtMoc>
+    <QtMoc Include="Combo\ComboExportDialog.h">
+      <Filter>Combo</Filter>
+    </QtMoc>
+    <ClInclude Include="Combo\ComboPortability.h">
+      <Filter>Combo</Filter>
+    </ClInclude>
     <QtUic Include="Combo\ComboImportDialog.ui">
       <Filter>Combo</Filter>
     </QtUic>
@@ -356,12 +369,6 @@
     </QtUic>
     <QtMoc Include="Group\GroupComboBox.h">
       <Filter>Group</Filter>
-    </QtMoc>
-    <QtUic Include="Backup\BackupRestoreDialog.ui">
-      <Filter>Backup</Filter>
-    </QtUic>
-    <QtMoc Include="Backup\BackupRestoreDialog.h">
-      <Filter>Backup</Filter>
     </QtMoc>
     <QtMoc Include="Group\GroupListWidget.h">
       <Filter>Group</Filter>
@@ -394,21 +401,12 @@
     <None Include="Translations\beeftext_pt_PT.ts">
       <Filter>Translation Files</Filter>
     </None>
-    <None Include="Resources\StyleCommon.qss">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="Resources\StyleDark.qss">
-      <Filter>Resource Files</Filter>
-    </None>
-    <None Include="Resources\StyleLight.qss">
-      <Filter>Resource Files</Filter>
-    </None>
     <None Include="Resources\StyleNoCustom.qss">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="Resources\BeeftextIcon.ico">
+    <Image Include="Resources\Icons\LeanBeeftextApp.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

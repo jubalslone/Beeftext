@@ -13,12 +13,36 @@
 #include "BeeftextConstants.h"
 #include "Preferences/PreferencesManager.h"
 #include <XMiLib/Exception.h>
+#ifdef Q_OS_WIN
+#include <ShlObj.h>
+#endif
 
 
 namespace globals {
 
 
 namespace {
+
+
+//****************************************************************************************************************************************************
+/// \return The Windows LocalAppData known-folder path without Qt's organization/application suffix.
+//****************************************************************************************************************************************************
+QString localAppDataRootPath() {
+#ifdef Q_OS_WIN
+    HRESULT const initResult = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    if (FAILED(initResult) && initResult != RPC_E_CHANGED_MODE)
+        return QString();
+    PWSTR knownFolderPath = nullptr;
+    HRESULT const result = SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_DEFAULT, nullptr, &knownFolderPath);
+    QString const path = SUCCEEDED(result) && knownFolderPath ? QString::fromWCharArray(knownFolderPath) : QString();
+    CoTaskMemFree(knownFolderPath);
+    if (SUCCEEDED(initResult))
+        CoUninitialize();
+    return path;
+#else
+    return QString();
+#endif
+}
 
 
 //****************************************************************************************************************************************************
@@ -79,7 +103,7 @@ ProcessListManager &sensitiveApplications() {
         return *manager;
 
     manager = std::make_unique<ProcessListManager>(QObject::tr(R"(<html><head/><body><p>Use this dialog
-      to list sensitive applications that do not work correctly with Beeftext because they do not support standard 
+      to list sensitive applications that do not work correctly with Lean Beeftext because they do not support standard
       copy-paste using Ctrl+V.</p><p>List applications using their process name (e.g, notepad.exe). Wildcards 
       are accepted.</p></body></html>)"));
     manager->setFilePath(sensitiveApplicationsFilePath());
@@ -99,7 +123,7 @@ ProcessListManager &excludedApplications() {
         return *manager;
 
     manager = std::make_unique<ProcessListManager>(QObject::tr(R"(<html><head/><body><p>Use this dialog
-      to list excluded applications. Beeftext will not perform substitution in these applications.</p>
+      to list excluded applications. Lean Beeftext will not perform substitution in these applications.</p>
       <p>List applications using their process name (e.g, notepad.exe). Wildcards 
       are accepted.</p></body></html>)"));
     manager->setFilePath(excludedApplicationsFilePath());
@@ -233,11 +257,40 @@ QString getBuildInfo() {
 
 
 //****************************************************************************************************************************************************
-/// \return The location of the local storage folder for the application
+/// \return The location of restorable application data.
 //****************************************************************************************************************************************************
 QString appDataDir() {
-    return isInPortableMode() ? portableModeDataFolderPath() :
-           QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    if (isInPortableMode())
+        return portableModeDataFolderPath();
+    QString const documents = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    return documents.isEmpty() ? QString() : QDir(documents).absoluteFilePath("Lean Beeftext");
+}
+
+
+//****************************************************************************************************************************************************
+/// \return The location of volatile, machine-local application data.
+//****************************************************************************************************************************************************
+QString machineLocalDataDir() {
+    if (isInPortableMode())
+        return portableModeDataFolderPath();
+    QString const localAppData = localAppDataRootPath();
+    return localAppData.isEmpty() ? QString() : QDir(localAppData).absoluteFilePath("Lean Beeftext");
+}
+
+
+//****************************************************************************************************************************************************
+/// \return The installed-mode preferences file path.
+//****************************************************************************************************************************************************
+QString installedSettingsFilePath() {
+    return QDir(appDataDir()).absoluteFilePath("Settings.ini");
+}
+
+
+//****************************************************************************************************************************************************
+/// \return The folder containing non-executable migration recovery copies.
+//****************************************************************************************************************************************************
+QString migrationBackupFolderPath() {
+    return QDir(appDataDir()).absoluteFilePath("Migration Backups");
 }
 
 
@@ -261,7 +314,7 @@ QString userTranslationRootFolderPath() {
 /// \return The absolute path of the log file
 //****************************************************************************************************************************************************
 QString logFilePath() {
-    return QDir(appDataDir()).absoluteFilePath("log.txt");
+    return QDir(machineLocalDataDir()).absoluteFilePath("log.txt");
 }
 
 
@@ -269,8 +322,11 @@ QString logFilePath() {
 /// \return The path of the backup folder
 //****************************************************************************************************************************************************
 QString backupFolderPath() {
-    PreferencesManager const &prefs = PreferencesManager::instance();
     QString defaultPath = defaultBackupFolderPath();
+    if (isInPortableMode() || constants::kRestrictedBuild)
+        return defaultPath;
+
+    PreferencesManager const &prefs = PreferencesManager::instance();
     if (!prefs.useCustomBackupLocation())
         return defaultPath;
     QString const customPath = PreferencesManager::instance().customBackupLocation();
@@ -282,7 +338,9 @@ QString backupFolderPath() {
 /// \return The default path of the backup folder
 //****************************************************************************************************************************************************
 QString defaultBackupFolderPath() {
-    return QDir(appDataDir()).absoluteFilePath("Backup");
+    // Preserve the established portable Data/Backup layout exactly. The
+    // installed name is plural for clarity in the user-restorable data folder.
+    return QDir(appDataDir()).absoluteFilePath(isInPortableMode() ? "Backup" : "Backups");
 }
 
 
@@ -317,34 +375,7 @@ QString emojiExcludedAppsFilePath() {
 /// \return the color of disabled items in tables and list views.
 //****************************************************************************************************************************************************
 QColor disabledTextColorInTablesAndLists() {
-    PreferencesManager const &prefs = PreferencesManager::instance();
-    return (prefs.useCustomTheme() && (ETheme::Dark == prefs.theme())) ? QColor(0x55, 0x55, 0x55)
-                                                                       : QColor(0xa0, 0xa0, 0xa0);
-}
-
-
-//****************************************************************************************************************************************************
-/// \return The filter for the backup files dialog.
-//****************************************************************************************************************************************************
-QString backupFileDialogFilter() {
-    return QObject::tr("Beeftext backup files (*.%1);;All files (*.*)").arg(constants::backupFileExtension);
-}
-
-
-//****************************************************************************************************************************************************
-/// \return The filter for the JSON files dialog.
-//****************************************************************************************************************************************************
-QString jsonFileDialogFilter() {
-    return QObject::tr("JSON files (*.json);;All files (*.*)");
-}
-
-
-//****************************************************************************************************************************************************
-/// \return The filter for the JSON & CSV files dialog.
-//****************************************************************************************************************************************************
-QString jsonCsvFileDialogFilter() {
-    return QObject::tr("JSON & CSV files (*.json *.csv);;JSON files (*.json);;"
-                       "CSV files (*.csv);;All files (*.*)");
+    return qApp->palette().color(QPalette::Disabled, QPalette::Text);
 }
 
 

@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string notr="true"/>
+   <string>Restore Combo Backup</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -19,7 +19,7 @@
      <item>
       <widget class="QLabel" name="labelBackup">
        <property name="text">
-        <string>Backup</string>
+        <string>Combo backup</string>
        </property>
       </widget>
      </item>
@@ -63,7 +63,7 @@
      <item>
       <widget class="QPushButton" name="buttonRestore">
        <property name="text">
-        <string>&amp;Restore</string>
+        <string>&amp;Restore Combos</string>
        </property>
       </widget>
      </item>

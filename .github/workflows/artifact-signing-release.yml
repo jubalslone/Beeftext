@@ -1,0 +1,579 @@
+name: Lean Beeftext signed production candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact reviewed 40-character commit SHA to build and sign
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-signing-${{ inputs.source_commit }}
+  cancel-in-progress: false
+
+jobs:
+  production-candidate:
+    name: Build, sign, verify, and package reviewed source
+    runs-on: windows-2022
+    timeout-minutes: 60
+    environment: production-signing
+    env:
+      ARTIFACT_SIGNING_ENDPOINT: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+      ARTIFACT_SIGNING_ACCOUNT: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+      ARTIFACT_SIGNING_PROFILE: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+
+    steps:
+      - name: Check out the exact reviewed commit and submodules
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.source_commit }}
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify source identity, signing configuration, and cleanliness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = '${{ inputs.source_commit }}'
+          if ($expected -cnotmatch '^[0-9a-f]{40}$') {
+            throw 'source_commit must be one exact lowercase 40-character Git commit SHA.'
+          }
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -cne $expected) {
+            throw "Checked out $actual, expected $expected."
+          }
+          if ($env:GITHUB_REPOSITORY -cne 'jubalslone/lean-beeftext') {
+            throw "Unexpected repository identity: $env:GITHUB_REPOSITORY"
+          }
+          foreach ($name in @(
+            'ARTIFACT_SIGNING_ENDPOINT',
+            'ARTIFACT_SIGNING_ACCOUNT',
+            'ARTIFACT_SIGNING_PROFILE'
+          )) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Protected production signing configuration is missing: $name"
+            }
+          }
+          if ($env:ARTIFACT_SIGNING_ENDPOINT -cnotmatch '^https://[^/]+\.codesigning\.azure\.net/?$') {
+            throw 'ARTIFACT_SIGNING_ENDPOINT is not an Azure Artifact Signing HTTPS endpoint.'
+          }
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The checked-out source tree has unstaged tracked changes.' }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The checked-out source tree has staged changes.' }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'A submodule has unstaged tracked changes.' }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'A submodule has staged changes.' }
+
+      - name: Install Qt 6.8 LTS
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.8.*'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+          setup-python: true
+
+      - name: Configure CMake
+        shell: pwsh
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+
+      - name: Build Release once
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $output = @(& cmake --build build --config Release --parallel -- /nologo /verbosity:minimal 2>&1)
+          $exitCode = $LASTEXITCODE
+          $output | ForEach-Object { $_.ToString() } | Set-Content -LiteralPath build-output.log
+          if ($exitCode -ne 0) {
+            $output | Select-Object -Last 180 | ForEach-Object { Write-Host $_.ToString() }
+            exit $exitCode
+          }
+
+      - name: Run complete automated test suite
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C Release --verbose 2>&1 | Tee-Object -FilePath test-output.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify build did not rewrite tracked source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The build modified tracked source.' }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The build staged source changes.' }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'The build modified a submodule.' }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'The build staged submodule changes.' }
+
+      - name: Stage installed and portable payloads from the one build
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $commit = (git rev-parse HEAD).Trim()
+          & ./Installer/StagePayload.ps1 -Mode Installed -BuildDirectory ./build `
+            -Destination ./Installer/_staging/installed -SourceCommit $commit `
+            -Repository $env:GITHUB_REPOSITORY -WorkflowRun $env:GITHUB_RUN_ID
+          & ./Installer/StagePayload.ps1 -Mode Portable -BuildDirectory ./build `
+            -Destination ./artifact/Lean-Beeftext-Portable -SourceCommit $commit `
+            -Repository $env:GITHUB_REPOSITORY -WorkflowRun $env:GITHUB_RUN_ID
+          $installedHash = (Get-FileHash ./Installer/_staging/installed/LeanBeeftext.exe -Algorithm SHA256).Hash
+          $portableHash = (Get-FileHash ./artifact/Lean-Beeftext-Portable/LeanBeeftext.exe -Algorithm SHA256).Hash
+          if ($installedHash -cne $portableHash) {
+            throw 'Installed and portable staging did not originate from the same executable bytes.'
+          }
+
+      - name: Verify unsigned staged payloads and mode isolation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Test-Payload([string]$Path, [string]$Mode) {
+            $commit = (git rev-parse HEAD).Trim()
+            $buildInfo = Get-Content -LiteralPath (Join-Path $Path 'BUILD_INFO.txt') -Raw
+            if ($buildInfo -notmatch '(?m)^Product: Lean Beeftext 1\.0\.0\r?$') { throw "$Mode product provenance is missing." }
+            if ($buildInfo -notmatch "(?m)^Distribution: $Mode\r?$") { throw "$Mode distribution provenance is missing." }
+            if ($buildInfo -notmatch '(?m)^Repository: jubalslone/lean-beeftext\r?$') { throw "$Mode repository provenance is wrong." }
+            if ($buildInfo -notmatch "(?m)^Source commit: $([regex]::Escape($commit))\r?$") { throw "$Mode source provenance is wrong." }
+            $checksumPath = Join-Path $Path 'SHA256SUMS.txt'
+            $checksumFullPath = [IO.Path]::GetFullPath($checksumPath)
+            $lines = @(Get-Content -LiteralPath $checksumPath)
+            $files = @(Get-ChildItem -Path $Path -Recurse -File | Where-Object { $_.FullName -ne $checksumFullPath })
+            if ($lines.Count -ne $files.Count) { throw "$Mode manifest entry count is wrong." }
+            $forbiddenExtensions = @('.pdb', '.ilk', '.exp', '.lib', '.obj', '.cpp', '.c', '.cc', '.h', '.hpp', '.ui', '.sln', '.vcxproj', '.cmake', '.bat', '.cmd', '.ps1')
+            foreach ($file in $files) {
+              if ($forbiddenExtensions -contains $file.Extension.ToLowerInvariant()) {
+                throw "Forbidden development/debug payload file in $Mode staging: $($file.FullName)"
+              }
+              if (($file.Extension -ieq '.exe') -and ($file.Name -ine 'LeanBeeftext.exe')) {
+                throw "Unexpected executable in $Mode staging: $($file.FullName)"
+              }
+              if ($file.Name -match '^(?<base>.+)d\.dll$' -and
+                (Test-Path -LiteralPath (Join-Path $file.DirectoryName ($Matches['base'] + '.dll')))) {
+                throw "Qt debug DLL has a release counterpart in $Mode staging: $($file.FullName)"
+              }
+            }
+            foreach ($runtimeDll in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
+              if (-not (Test-Path -LiteralPath (Join-Path $Path $runtimeDll) -PathType Leaf)) {
+                throw "$Mode payload is missing required runtime dependency $runtimeDll."
+              }
+            }
+            foreach ($line in $lines) {
+              if ($line -cnotmatch '^([0-9a-f]{64})  (.+)$') { throw "Malformed $Mode manifest entry: $line" }
+              $file = Join-Path $Path $Matches[2]
+              if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing $Mode payload file: $($Matches[2])" }
+              $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($actual -cne $Matches[1]) { throw "$Mode SHA-256 mismatch: $($Matches[2])" }
+            }
+          }
+          Test-Payload ./Installer/_staging/installed Installed
+          Test-Payload ./artifact/Lean-Beeftext-Portable Portable
+          if (Test-Path ./Installer/_staging/installed/Portable.bin) { throw 'Installed payload contains Portable.bin.' }
+          if (Test-Path ./Installer/_staging/installed/PortableApps.bin) { throw 'Installed payload contains PortableApps.bin.' }
+          if (-not (Test-Path ./artifact/Lean-Beeftext-Portable/Portable.bin)) { throw 'Portable payload is missing Portable.bin.' }
+
+      - name: Azure login with GitHub OIDC
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Confirm OIDC Azure identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          az account show --query '{subscription:name, tenant:tenantId}' -o table
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Azure OIDC login did not produce a usable Azure CLI session.'
+          }
+
+      - name: Sign the one LeanBeeftext executable
+        uses: Azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\Installer\_staging\installed\LeanBeeftext.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          exclude-environment-credential: true
+
+      - name: Verify signed app, reuse it for portable, and finalize payload manifests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installedRoot = (Resolve-Path ./Installer/_staging/installed).Path
+          $portableRoot = (Resolve-Path ./artifact/Lean-Beeftext-Portable).Path
+          $installedExe = Join-Path $installedRoot 'LeanBeeftext.exe'
+          $portableExe = Join-Path $portableRoot 'LeanBeeftext.exe'
+          $signature = Get-AuthenticodeSignature -LiteralPath $installedExe
+          if ($signature.Status -ne 'Valid') { throw "Signed app status is $($signature.Status)." }
+          if (-not $signature.SignerCertificate) { throw 'Signed app has no signer certificate.' }
+          if (-not $signature.TimeStamperCertificate) { throw 'Signed app has no RFC 3161 timestamp certificate.' }
+
+          Copy-Item -LiteralPath $installedExe -Destination $portableExe -Force
+          $installedHash = (Get-FileHash -LiteralPath $installedExe -Algorithm SHA256).Hash
+          $portableHash = (Get-FileHash -LiteralPath $portableExe -Algorithm SHA256).Hash
+          if ($installedHash -cne $portableHash) {
+            throw 'Portable packaging does not contain the exact signed installed executable bytes.'
+          }
+
+          foreach ($root in @($installedRoot, $portableRoot)) {
+            @(
+              'Authenticode: Azure Artifact Signing'
+              "Signing account: $env:ARTIFACT_SIGNING_ACCOUNT"
+              "Certificate profile: $env:ARTIFACT_SIGNING_PROFILE"
+              "Signer subject: $($signature.SignerCertificate.Subject)"
+            ) | Add-Content -LiteralPath (Join-Path $root 'BUILD_INFO.txt') -Encoding utf8
+
+            $checksumPath = Join-Path $root 'SHA256SUMS.txt'
+            $checksumFullPath = [IO.Path]::GetFullPath($checksumPath)
+            @(Get-ChildItem -Path $root -Recurse -File |
+              Where-Object { $_.FullName -ne $checksumFullPath } |
+              Sort-Object FullName |
+              ForEach-Object {
+                $relativePath = [IO.Path]::GetRelativePath($root, $_.FullName).Replace('\', '/')
+                $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                "$hash  $relativePath"
+              }) | Set-Content -LiteralPath $checksumPath -Encoding ascii
+          }
+
+          Compress-Archive -Path ./artifact/Lean-Beeftext-Portable/* `
+            -DestinationPath ./artifact/Lean-Beeftext-1.0.0-portable-windows-x64.zip -CompressionLevel Optimal -Force
+
+      - name: Re-verify final signed payload manifests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Test-FinalManifest([string]$Path, [string]$Mode) {
+            $checksumPath = Join-Path $Path 'SHA256SUMS.txt'
+            $checksumFullPath = [IO.Path]::GetFullPath($checksumPath)
+            $lines = @(Get-Content -LiteralPath $checksumPath)
+            $files = @(Get-ChildItem -Path $Path -Recurse -File | Where-Object { $_.FullName -ne $checksumFullPath })
+            if ($lines.Count -ne $files.Count) { throw "$Mode final manifest entry count is wrong." }
+            foreach ($line in $lines) {
+              if ($line -cnotmatch '^([0-9a-f]{64})  (.+)$') { throw "Malformed $Mode final manifest entry: $line" }
+              $file = Join-Path $Path $Matches[2]
+              if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing $Mode final payload file: $($Matches[2])" }
+              $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($actual -cne $Matches[1]) { throw "$Mode final SHA-256 mismatch: $($Matches[2])" }
+            }
+            $buildInfo = Get-Content -LiteralPath (Join-Path $Path 'BUILD_INFO.txt') -Raw
+            if ($buildInfo -notmatch '(?m)^Authenticode: Azure Artifact Signing\r?$') {
+              throw "$Mode signed-build provenance is missing."
+            }
+          }
+          Test-FinalManifest ./Installer/_staging/installed Installed
+          Test-FinalManifest ./artifact/Lean-Beeftext-Portable Portable
+
+      - name: Record installed payload audit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = (Resolve-Path ./Installer/_staging/installed).Path
+          $files = @(Get-ChildItem -LiteralPath $root -Recurse -File)
+          $categories = [ordered]@{
+            'Lean executable' = [long]0
+            'Qt runtime DLLs' = [long]0
+            'Qt graphics support' = [long]0
+            'Qt plugins' = [long]0
+            'MSVC runtime' = [long]0
+            'Translations' = [long]0
+            'Resources, documentation, and provenance' = [long]0
+          }
+          foreach ($file in $files) {
+            $relative = [IO.Path]::GetRelativePath($root, $file.FullName).Replace('\', '/')
+            $name = $file.Name.ToLowerInvariant()
+            if ($name -eq 'leanbeeftext.exe') { $category = 'Lean executable' }
+            elseif ($name -match '^qt6.*\.dll$') { $category = 'Qt runtime DLLs' }
+            elseif ($name -in @('opengl32sw.dll', 'd3dcompiler_47.dll')) { $category = 'Qt graphics support' }
+            elseif (($relative -match '/') -and ($file.Extension -ieq '.dll')) { $category = 'Qt plugins' }
+            elseif ($name -match '^(msvcp|vcruntime|vccorlib|concrt).*\.dll$') { $category = 'MSVC runtime' }
+            elseif ($relative.StartsWith('translations/', [StringComparison]::OrdinalIgnoreCase)) { $category = 'Translations' }
+            else { $category = 'Resources, documentation, and provenance' }
+            $categories[$category] += [long]$file.Length
+          }
+          $audit = [Collections.Generic.List[string]]::new()
+          $audit.Add("Installed payload bytes: $([long](($files | Measure-Object Length -Sum).Sum))")
+          $audit.Add("Installed payload files: $($files.Count)")
+          $audit.Add('')
+          $audit.Add('Category bytes:')
+          foreach ($entry in $categories.GetEnumerator()) { $audit.Add("$($entry.Key): $($entry.Value)") }
+          $audit.Add('')
+          $audit.Add('Top 15 largest files:')
+          foreach ($file in ($files | Sort-Object Length -Descending | Select-Object -First 15)) {
+            $relative = [IO.Path]::GetRelativePath($root, $file.FullName).Replace('\', '/')
+            $audit.Add("$($file.Length)  $relative")
+          }
+          $audit | Set-Content -LiteralPath ./artifact/INSTALLED_PAYLOAD_AUDIT.txt -Encoding utf8
+          $audit | Write-Output
+
+      - name: Install pinned Inno Setup 7.1.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $download = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          $installDirectory = Join-Path $env:RUNNER_TEMP 'Inno Setup 7'
+          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $download
+          $expected = '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f'
+          $actual = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -cne $expected) { throw "Inno Setup download hash mismatch: $actual" }
+          $process = Start-Process -FilePath $download -ArgumentList @(
+            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$installDirectory`""
+          ) -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed with exit code $($process.ExitCode)." }
+          $compiler = Join-Path $installDirectory 'ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) { throw 'Pinned Inno compiler was not installed.' }
+          "INNO_COMPILER=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Compile and Authenticode-sign installer and generated uninstaller
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $wrapper = (Resolve-Path ./Installer/Invoke-ArtifactSigning.ps1).Path
+          $signToolCommand = "pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$wrapper`" -FilePath `$f"
+          & $env:INNO_COMPILER `
+            '--define=ProductionSigning' `
+            "--signtool=leanartifact=$signToolCommand" `
+            ./Installer/LeanBeeftext.iss 2>&1 | Tee-Object -FilePath installer-build-output.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path ./Installer/_output/Lean-Beeftext-Setup-1.0.0.exe)) {
+            throw 'Inno did not produce the expected signed installer.'
+          }
+
+      - name: Verify signed app and final installer identity and timestamps
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Assert-Signature([string]$Path, [string]$ExpectedSubject = '') {
+            $signature = Get-AuthenticodeSignature -LiteralPath $Path
+            if ($signature.Status -ne 'Valid') { throw "$Path Authenticode status is $($signature.Status)." }
+            if (-not $signature.SignerCertificate) { throw "$Path has no signer certificate." }
+            if (-not $signature.TimeStamperCertificate) { throw "$Path has no RFC 3161 timestamp certificate." }
+            if ($ExpectedSubject -and $signature.SignerCertificate.Subject -cne $ExpectedSubject) {
+              throw "$Path signer subject does not match the signed app identity."
+            }
+            return $signature
+          }
+          $app = (Resolve-Path ./Installer/_staging/installed/LeanBeeftext.exe).Path
+          $portableApp = (Resolve-Path ./artifact/Lean-Beeftext-Portable/LeanBeeftext.exe).Path
+          $installer = (Resolve-Path ./Installer/_output/Lean-Beeftext-Setup-1.0.0.exe).Path
+          $appSignature = Assert-Signature $app
+          $null = Assert-Signature $portableApp $appSignature.SignerCertificate.Subject
+          $installerSignature = Assert-Signature $installer $appSignature.SignerCertificate.Subject
+          Write-Host "Configured profile: $env:ARTIFACT_SIGNING_ACCOUNT/$env:ARTIFACT_SIGNING_PROFILE"
+          Write-Host "App signer: $($appSignature.SignerCertificate.Subject)"
+          Write-Host "Installer signer: $($installerSignature.SignerCertificate.Subject)"
+
+      - name: Exercise signed install, reinstall, uninstaller, and data preservation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = (Resolve-Path ./Installer/_output/Lean-Beeftext-Setup-1.0.0.exe).Path
+          $stagedApp = (Resolve-Path ./Installer/_staging/installed/LeanBeeftext.exe).Path
+          $expectedAppHash = (Get-FileHash -LiteralPath $stagedApp -Algorithm SHA256).Hash
+          $expectedSubject = (Get-AuthenticodeSignature -LiteralPath $stagedApp).SignerCertificate.Subject
+          $installDirectory = Join-Path $env:ProgramFiles 'Lean Beeftext'
+          $documents = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
+          $dataDirectory = Join-Path $documents 'Lean Beeftext'
+          New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
+          $fixture = Join-Path $dataDirectory 'ci-user-data-preserved.txt'
+          'preserve across uninstall' | Set-Content -LiteralPath $fixture -Encoding ascii
+
+          function Invoke-Setup {
+            $process = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw "Lean Setup failed with exit code $($process.ExitCode)." }
+          }
+          function Assert-InstalledSignatures {
+            $installedApp = Join-Path $installDirectory 'LeanBeeftext.exe'
+            $uninstaller = Join-Path $installDirectory 'unins000.exe'
+            if ((Get-FileHash -LiteralPath $installedApp -Algorithm SHA256).Hash -cne $expectedAppHash) {
+              throw 'Installed LeanBeeftext.exe differs from the signed staged executable.'
+            }
+            foreach ($path in @($installedApp, $uninstaller)) {
+              $signature = Get-AuthenticodeSignature -LiteralPath $path
+              if ($signature.Status -ne 'Valid') { throw "$path Authenticode status is $($signature.Status)." }
+              if (-not $signature.SignerCertificate) { throw "$path has no signer certificate." }
+              if (-not $signature.TimeStamperCertificate) { throw "$path has no RFC 3161 timestamp certificate." }
+              if ($signature.SignerCertificate.Subject -cne $expectedSubject) {
+                throw "$path signer subject does not match the signed app identity."
+              }
+            }
+          }
+
+          Invoke-Setup
+          $installedExecutable = Join-Path $installDirectory 'LeanBeeftext.exe'
+          if (-not (Test-Path -LiteralPath $installedExecutable)) { throw 'Installed executable is missing.' }
+          if (Test-Path -LiteralPath (Join-Path $installDirectory 'Portable.bin')) { throw 'Installed application became portable.' }
+          if (Test-Path -LiteralPath (Join-Path $installDirectory 'PortableApps.bin')) { throw 'Installed application contains PortableApps.bin.' }
+          $uninstallKey = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{499E5EE9-ECC6-455E-B78A-EDF581715A80}_is1'
+          if (-not (Test-Path -LiteralPath $uninstallKey)) { throw 'Lean uninstall registration is missing.' }
+          Assert-InstalledSignatures
+
+          Invoke-Setup
+          if (-not (Test-Path -LiteralPath $installedExecutable)) { throw 'Same-version reinstall removed the application.' }
+          Assert-InstalledSignatures
+
+          $uninstaller = Join-Path $installDirectory 'unins000.exe'
+          $uninstallerSignature = Get-AuthenticodeSignature -LiteralPath $uninstaller
+          @(
+            "SHA-256: $((Get-FileHash -LiteralPath $uninstaller -Algorithm SHA256).Hash.ToLowerInvariant())"
+            "Status: $($uninstallerSignature.Status)"
+            "Signer subject: $($uninstallerSignature.SignerCertificate.Subject)"
+            "Signer thumbprint: $($uninstallerSignature.SignerCertificate.Thumbprint)"
+            "Timestamp subject: $($uninstallerSignature.TimeStamperCertificate.Subject)"
+          ) | Set-Content -LiteralPath ./artifact/UNINSTALLER_SIGNATURE.txt -Encoding utf8
+
+          # Use a bounded synthetic process at the exact installed path to prove that silent
+          # uninstall fails closed without requiring the GUI application on the CI desktop.
+          $savedExecutable = Join-Path $installDirectory 'LeanBeeftext.exe.product'
+          Move-Item -LiteralPath $installedExecutable -Destination $savedExecutable
+          Copy-Item -LiteralPath (Join-Path $env:WINDIR 'System32\ping.exe') -Destination $installedExecutable
+          $runningFixture = Start-Process -FilePath $installedExecutable -ArgumentList @('-n', '8', '127.0.0.1') -PassThru
+          Start-Sleep -Milliseconds 500
+          try {
+            $blockedUninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+            if ($blockedUninstall.ExitCode -eq 0) { throw 'Silent uninstall proceeded while the exact installed Lean process path was running.' }
+            if (-not (Test-Path -LiteralPath $installDirectory)) { throw 'Blocked silent uninstall changed the installed payload.' }
+          }
+          finally {
+            if (-not $runningFixture.WaitForExit(15000)) { throw 'Bounded running-process fixture did not exit normally.' }
+            Remove-Item -LiteralPath $installedExecutable -Force
+            Move-Item -LiteralPath $savedExecutable -Destination $installedExecutable
+          }
+
+          $process = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Lean uninstall failed with exit code $($process.ExitCode)." }
+          for ($attempt = 0; $attempt -lt 20 -and (Test-Path -LiteralPath $installDirectory); ++$attempt) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path -LiteralPath $installDirectory) { throw 'Program Files payload survived uninstall.' }
+          if (Test-Path -LiteralPath $uninstallKey) { throw 'Uninstall registration survived uninstall.' }
+          if (-not (Test-Path -LiteralPath $fixture)) { throw 'Documents user-data fixture was deleted by uninstall.' }
+
+      - name: Generate final signed-candidate hashes and signing provenance
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $portableZip = (Resolve-Path ./artifact/Lean-Beeftext-1.0.0-portable-windows-x64.zip).Path
+          $portableExe = (Resolve-Path ./artifact/Lean-Beeftext-Portable/LeanBeeftext.exe).Path
+          $installer = (Resolve-Path ./Installer/_output/Lean-Beeftext-Setup-1.0.0.exe).Path
+          $installedExe = (Resolve-Path ./Installer/_staging/installed/LeanBeeftext.exe).Path
+
+          $appSignature = Get-AuthenticodeSignature -LiteralPath $installedExe
+          $installerSignature = Get-AuthenticodeSignature -LiteralPath $installer
+          foreach ($entry in @(
+            @{ Name = 'LeanBeeftext.exe'; Signature = $appSignature },
+            @{ Name = 'installer'; Signature = $installerSignature }
+          )) {
+            if ($entry.Signature.Status -ne 'Valid' -or
+              -not $entry.Signature.SignerCertificate -or
+              -not $entry.Signature.TimeStamperCertificate) {
+              throw "$($entry.Name) lost its required signature or timestamp before final hashing."
+            }
+          }
+
+          $portableExeHash = (Get-FileHash -LiteralPath $portableExe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $installedExeHash = (Get-FileHash -LiteralPath $installedExe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($portableExeHash -cne $installedExeHash) {
+            throw 'The installed and portable final signed executable hashes differ.'
+          }
+          @(
+            "$((Get-FileHash -LiteralPath $portableZip -Algorithm SHA256).Hash.ToLowerInvariant())  Lean-Beeftext-1.0.0-portable-windows-x64.zip"
+            "$portableExeHash  portable/LeanBeeftext.exe"
+            "$((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant())  Lean-Beeftext-Setup-1.0.0.exe"
+            "$installedExeHash  installed/LeanBeeftext.exe"
+          ) | Set-Content -LiteralPath ./artifact/DISTRIBUTION_SHA256SUMS.txt -Encoding ascii
+
+          @(
+            'Product: Lean Beeftext 1.0.0 signed production candidate'
+            "Repository: $env:GITHUB_REPOSITORY"
+            "Source commit: $((git rev-parse HEAD).Trim())"
+            "Workflow run: $env:GITHUB_RUN_ID"
+            'Authentication: GitHub OIDC to Microsoft Entra; no client secret'
+            "Artifact Signing endpoint: $env:ARTIFACT_SIGNING_ENDPOINT"
+            "Artifact Signing account: $env:ARTIFACT_SIGNING_ACCOUNT"
+            "Artifact Signing profile: $env:ARTIFACT_SIGNING_PROFILE"
+            'File digest: SHA256'
+            'Timestamp protocol: RFC3161'
+            'Timestamp digest: SHA256'
+            'Timestamp URL: http://timestamp.acs.microsoft.com'
+            "Signer subject: $($appSignature.SignerCertificate.Subject)"
+            "Signer issuer: $($appSignature.SignerCertificate.Issuer)"
+            "App signer thumbprint: $($appSignature.SignerCertificate.Thumbprint)"
+            "Installer signer thumbprint: $($installerSignature.SignerCertificate.Thumbprint)"
+            "App timestamp subject: $($appSignature.TimeStamperCertificate.Subject)"
+            "Installer timestamp subject: $($installerSignature.TimeStamperCertificate.Subject)"
+          ) | Set-Content -LiteralPath ./artifact/PRODUCTION_SIGNING_REPORT.txt -Encoding utf8
+
+          Copy-Item -LiteralPath $installer -Destination ./artifact/Lean-Beeftext-Setup-1.0.0.exe
+          Get-Content -LiteralPath ./artifact/DISTRIBUTION_SHA256SUMS.txt
+          Get-Content -LiteralPath ./artifact/PRODUCTION_SIGNING_REPORT.txt
+          Get-Content -LiteralPath ./artifact/UNINSTALLER_SIGNATURE.txt
+
+      - name: Verify tracked source remains clean after signed packaging
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'Signed packaging modified tracked source.' }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'Signed packaging staged tracked source.' }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'Signed packaging modified a submodule.' }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'Signed packaging staged submodule changes.' }
+
+      - name: Azure logout
+        if: always()
+        shell: pwsh
+        run: az logout
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Lean-Beeftext-1.0.0-production-signing-diagnostics
+          path: |
+            build-output.log
+            test-output.log
+            installer-build-output.log
+            Installer/_output/*.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload signed portable candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Lean-Beeftext-1.0.0-signed-portable-windows-x64
+          path: |
+            artifact/Lean-Beeftext-1.0.0-portable-windows-x64.zip
+            artifact/DISTRIBUTION_SHA256SUMS.txt
+            artifact/PRODUCTION_SIGNING_REPORT.txt
+            artifact/UNINSTALLER_SIGNATURE.txt
+            artifact/INSTALLED_PAYLOAD_AUDIT.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload signed installer candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Lean-Beeftext-1.0.0-signed-installer
+          path: |
+            artifact/Lean-Beeftext-Setup-1.0.0.exe
+            artifact/DISTRIBUTION_SHA256SUMS.txt
+            artifact/PRODUCTION_SIGNING_REPORT.txt
+            artifact/UNINSTALLER_SIGNATURE.txt
+            artifact/INSTALLED_PAYLOAD_AUDIT.txt
+          if-no-files-found: error
+          retention-days: 14

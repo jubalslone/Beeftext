@@ -20,6 +20,7 @@
 #include "Picker/PickerWindow.h"
 #include "Combo/ComboManager.h"
 #include "LastUse/ComboLastUseFile.h"
+#include "Migration/LegacyMigrationManager.h"
 #include <XMiLib/SingleInstanceApp.h>
 #include <XMiLib/SystemUtils.h>
 #include <XMiLib/Exception.h>
@@ -63,7 +64,9 @@ int main(int argc, char *argv[]) {
         QApplication app(argc, argv);
 
         // check for an existing instance of the application
-        SingleInstanceApplication const singleInstanceApp("BeeftextSingleInstanceIdentifier");
+        // Lean and upstream Beeftext intentionally use different process identities
+        // so both applications can run at the same time.
+        SingleInstanceApplication const singleInstanceApp(constants::kSingleInstanceIdentifier);
         if (!singleInstanceApp.isFirstInstance()) {
             // SingleInstance app detected that another instance is running and 'put a flag in memory to indicate
             // to the other instance that another one tried to be created
@@ -75,7 +78,9 @@ int main(int argc, char *argv[]) {
 
         QGuiApplication::setQuitOnLastWindowClosed(false);
         QGuiApplication::setOrganizationName(constants::kOrganizationName);
-        QGuiApplication::setApplicationName(constants::kApplicationName);
+        QGuiApplication::setApplicationName(constants::kSettingsApplicationName);
+        QGuiApplication::setApplicationDisplayName(constants::kApplicationName);
+        QGuiApplication::setApplicationVersion(constants::kProductVersion);
 
         ensureAppDataDirsExist();
         PreferencesManager const &prefs = PreferencesManager::instance();
@@ -85,7 +90,9 @@ int main(int argc, char *argv[]) {
         debugLog.addInfo(QString("%1 started.").arg(constants::kApplicationName));
         debugLog.addInfo(QString("Build info: %1").arg(globals::getBuildInfo()));
         applyAutostartParameters();
-        removeFileMarkedForDeletion();
+        LegacyMigrationManager::runIfNeeded();
+        if constexpr (!constants::kRestrictedBuild)
+            removeFileMarkedForDeletion();
 
         // if necessary warn about deprecated rich text support and offer an exit option.
         if (prefs.alreadyLaunched() && (!prefs.alreadyConvertedRichTextCombos()) &&
@@ -104,13 +111,8 @@ int main(int argc, char *argv[]) {
         // QWindowsWindowFunctions::setWindowActivationBehavior(QWindowsWindowFunctions::AlwaysActivateWindow);
         ensureMainWindowHasAHandle(window);
 
-        if (!prefs.alreadyLaunched()) {
+        if (!prefs.alreadyLaunched())
             window.show();
-            if ((!PreferencesManager::instance().alreadyLaunched()) && (QMessageBox::Yes == QMessageBox::information(
-                &window, QObject::tr("Getting Started"), QObject::tr("New to Beeftext?\n\nDo you want to read a short "
-                                                                     "'Getting Started' tutorial?"), QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes)))
-                QDesktopServices::openUrl(QUrl(constants::kGettingStartedUrl));
-        }
         QObject::connect(&singleInstanceApp, &SingleInstanceApplication::anotherInstanceWasLaunched, &window, &MainWindow::onAnotherAppInstanceLaunch);
         prefs.setAlreadyLaunched();
         setupPickerWindowShortcut();
@@ -154,7 +156,12 @@ void ensureDirExists(QString const &path) {
 //
 //****************************************************************************************************************************************************
 void ensureAppDataDirsExist() {
+    if (globals::appDataDir().isEmpty())
+        throw Exception("The Windows Documents known folder could not be resolved.");
+    if (globals::machineLocalDataDir().isEmpty())
+        throw Exception("The machine-local application data folder could not be resolved.");
     ensureDirExists(globals::appDataDir());
+    ensureDirExists(globals::machineLocalDataDir());
     ensureDirExists(globals::userTranslationRootFolderPath());
 }
 
@@ -214,16 +221,16 @@ void setupPickerWindowShortcut() {
     if (shortcut->keyboardModifiers().testFlag(Qt::MetaModifier)) {
         shortcut = PreferencesManager::defaultComboPickerShortcut();
         prefs.setComboPickerShortcut(shortcut);
-        debugLog.addWarning("Thecombo picker shortcut contained the Windows key. It has been reset to the default value.");
-        QMessageBox::information(nullptr, QObject::tr("Error"), QObject::tr("Starting with Beeftext v13.0, the combo picker"
-                                                                            " shortcut cannot contain the Windows key.The shortcut is now %1.").arg(shortcut->toString()));
+        debugLog.addWarning("The Quick Search shortcut contained the Windows key. It has been reset to the default value.");
+        QMessageBox::information(nullptr, QObject::tr("Error"), QObject::tr("The Quick Search shortcut cannot contain"
+                                                                            " the Windows key. The shortcut is now %1.").arg(shortcut->toString()));
     }
     if (applyComboPickerPreferences())
         return;
 
     prefs.setComboPickerEnabled(false);
-    debugLog.addError(QString("The shortcut for the combo picker windows (%1) could not be registered. "
-                              "The combo picker has been turned off.").arg(shortcut ? shortcut->toString() : "<unknown>"));
-    QMessageBox::critical(nullptr, QObject::tr("Error"), QObject::tr("The shortcut for the combo picker window "
-                                                                     "could not be registered. The combo picker has been turned off."));
+    debugLog.addError(QString("The Quick Search shortcut (%1) could not be registered. "
+                              "Quick Search has been turned off.").arg(shortcut ? shortcut->toString() : "<unknown>"));
+    QMessageBox::critical(nullptr, QObject::tr("Error"), QObject::tr("The Quick Search shortcut "
+                                                                     "could not be registered. Quick Search has been turned off."));
 }

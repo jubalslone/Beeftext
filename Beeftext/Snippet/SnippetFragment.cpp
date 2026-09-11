@@ -85,6 +85,16 @@ ListSpSnippetFragment splitForShortcutVariable(QString const &str) {
 /// \return the list of fragments
 //****************************************************************************************************************************************************
 ListSpSnippetFragment splitStringIntoSnippetFragments(QString const &str) {
+    // The restricted build renders snippets only as text. This disables #{key:...},
+    // #{shortcut:...}, and #{delay:...}, which can otherwise automate arbitrary UI
+    // actions, including launching a shell and submitting commands.
+    if (constants::kRestrictedBuild) {
+        ListSpSnippetFragment result;
+        if (!str.isEmpty())
+            result.append(std::make_shared<TextSnippetFragment>(str));
+        return result;
+    }
+
     ListSpSnippetFragment result;
     QString s(str);
     QRegularExpression const rx(QString(R"((.*)%1(.*))").arg(constants::kDelayVariableRegExpStr), QRegularExpression::DotMatchesEverythingOption);
@@ -121,5 +131,3 @@ void renderSnippetFragmentList(ListSpSnippetFragment const &fragments) {
             QThread::msleep(kDelayBetweenFragmentsMs);
     }
 }
-
-

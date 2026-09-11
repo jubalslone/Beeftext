@@ -42,16 +42,11 @@ private slots:
     void onCheckUseShiftInsertForPasting(bool checked) const; ///< Slot for the 'Use Shift+Insert for pasting' checkbox.
     void onCheckUseCustomPowerShellVersion(bool checked); ///< Slot for the 'Use custom PowerShell version' check box.
     void onChangeCustomPowershellVersion(); ///< Slot for the 'Change' button of the custom PowerShell version.
-    void onCheckAutoBackup(bool value); ///< Slot for the 'auto backup' checkbox.
-    void onCheckUseCustomBackupLocation(bool value) const; ///< Slot for the 'Use custom backup location' checkbox.
-    void onChangeCustomBackupLocation(); ///< Slot for the 'Change' button of the custom backup location.
-    void onRestoreBackup(); ///< Slot for the 'Restore backup' action
     void onEditSensitiveApplications(); ///< Slot for the 'Edit sensitive applications' action
     void onEditExcludedApplications(); ///< Slot for the 'Edit sensitive applications' action
 
 private: // member functions
     void changeEvent(QEvent *event) override; ///< Change event handler.
-    bool promptForAndRemoveAutoBackups(); ///< Ask the user if automatic backups should be deleted and if so, performs the operation
 
 private: // data members
     Ui::PrefPaneAdvanced ui_ {}; ///< The GUI of the pane.

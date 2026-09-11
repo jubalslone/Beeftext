@@ -1,7 +1,7 @@
 ﻿/// \file
 /// \author 
 ///
-/// \brief Declaration of the appearance preference pane.
+/// \brief Declaration of the language preference pane.
 ///  
 /// Copyright (c) . All rights reserved.  
 /// Licensed under the MIT License. See LICENSE file in the project root for full license information. 
@@ -34,9 +34,6 @@ private slots:
     void onRefreshLanguageList() const; ///< Slot for the 'Refresh Language List' button.
     void onComboLanguageValueChanged(int index) const; ///< Slot for the change of the value in the language combo.
     static void onOpenTranslationFolder(); ///< Slot for the 'Translation Folder' button.
-    void onCheckUseCustomTheme(bool checked) const; ///< Slot for the 'Use custom theme' checkbox.
-    void onComboThemeValueChanged(int) const; ///< slot for the change of the 'Theme' combo.
-    void updateGui() const; ///< Update the GUI.
 
 private: // member functions
     void changeEvent(QEvent *event) override; ///< Change event handler

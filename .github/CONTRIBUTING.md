@@ -1,28 +1,16 @@
-# Contributing to Beeftext
+# Contributing to Lean Beeftext
 
-## Reporting a bug
+Thank you for helping improve Lean Beeftext. Before opening an issue, check the [existing issues](https://github.com/jubalslone/lean-beeftext/issues) and include the exact Lean Beeftext version, Windows version, portable/installed status, and reproducible steps.
 
-- **Make sure you have the latest version of the application**. You can use the automatic update system built-into the application or check the [Beeftext releases page](https://github.com/xmichelo/Beeftext/releases).
+Lean Beeftext deliberately has a narrower execution model than upstream Beeftext. Changes must preserve the boundaries in [SECURITY_MODEL.md](../SECURITY_MODEL.md), including literal handling of blocked variables, direct text insertion, modifier refusal, bounded cursor movement, portable containment, and disabled upstream updating.
 
-- **Make sure the issue has not yet been reported** in the [issue tracker](https://github.com/xmichelo/Beeftext/issues).
+For code changes:
 
-- **Submit your issue**. Please follow the following rules:
-  - Use English.
-  - Describe your bug clearly. Do not hesitate to add screenshots if relevant.
-  - Give details about your computer environment (e.g. *Windows 10 Professional 64bit English*).
+- Start from the current development branch requested by the maintainer.
+- Keep changes focused and preserve unrelated history.
+- Add or update regression tests.
+- Run the complete test suite and Windows Release build.
+- Do not describe the application as absolutely secure or formally certified.
+- Preserve Xavier Michelon's upstream authorship and MIT notice, and add accurate notices for new third-party dependencies.
 
-## Submitting a patch for a bug
-
-- **Open a new GitHub pull request with the patch**.
-
-- **Clearly describe the problem and solution**. Do not forget to add the issue number if relevant.
-
-- **Be sure to comply with the implicit coding convention used in the source code**: tab settings, case, etc.
-
-## Adding new feature, and modifying the application behavior
-
-If you plan to add a feature or make a major modification to the behavior of Beeftext, please submit a **feature request** issue in the issue tracker, indicating that you are voluteering for implementation, and wait for approval by the developer before creating a pull request. 
-
-Failure to comply to this rule will likely result in the closing of the pull request. Note that Beeftext uses an open source license that allows you to publish your own change in a fork, provided you comply with the [program's license](LICENSE).
-
-
+For upstream Beeftext behavior, issues, or contributions unrelated to this fork, use the explicitly separate [upstream Beeftext project](https://github.com/xmichelo/Beeftext).

@@ -114,7 +114,7 @@
       <OutputFile>$(OutDir)\$(ProjectName).exe</OutputFile>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Winmm.lib;Shell32.lib;Ole32.lib;Rstrtmgr.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <TargetMachine>MachineX64</TargetMachine>
       <AdditionalOptions> /SUBSYSTEM:WINDOWS</AdditionalOptions>
     </Link>
@@ -173,7 +173,7 @@
       <OutputFile>$(OutDir)\$(ProjectName).exe</OutputFile>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Winmm.lib;Shell32.lib;Ole32.lib;Rstrtmgr.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <TargetMachine>MachineX64</TargetMachine>
       <AdditionalOptions> /SUBSYSTEM:WINDOWS</AdditionalOptions>
     </Link>
@@ -234,7 +234,7 @@
       <OutputFile>$(OutDir)\$(ProjectName).exe</OutputFile>
       <AdditionalLibraryDirectories>%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>Winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>Winmm.lib;Shell32.lib;Ole32.lib;Rstrtmgr.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <TargetMachine>MachineX64</TargetMachine>
       <AdditionalOptions> /SUBSYSTEM:WINDOWS</AdditionalOptions>
     </Link>
@@ -271,7 +271,6 @@
   <ItemGroup>
     <ClCompile Include="AutoStart.cpp" />
     <ClCompile Include="Backup\BackupManager.cpp" />
-    <ClCompile Include="Backup\BackupRestoreDialog.cpp" />
     <ClCompile Include="BeeftextConstants.cpp" />
     <ClCompile Include="BeeftextGlobals.cpp" />
     <ClCompile Include="BeeftextUtils.cpp" />
@@ -282,10 +281,12 @@
     <ClCompile Include="Combo\Combo.cpp" />
     <ClCompile Include="Combo\ComboDialog.cpp" />
     <ClCompile Include="Combo\ComboEditor.cpp" />
+    <ClCompile Include="Combo\ComboExportDialog.cpp" />
     <ClCompile Include="Combo\ComboFrame.cpp" />
     <ClCompile Include="Combo\ComboImportDialog.cpp" />
     <ClCompile Include="Combo\ComboList.cpp" />
     <ClCompile Include="Combo\ComboManager.cpp" />
+    <ClCompile Include="Combo\ComboPortability.cpp" />
     <ClCompile Include="Combo\ComboSortFilterProxyModel.cpp" />
     <ClCompile Include="Combo\ComboKeywordValidator.cpp" />
     <ClCompile Include="Combo\ComboTableWidget.cpp" />
@@ -307,6 +308,8 @@
     <ClCompile Include="KeyboardMapper.cpp" />
     <ClCompile Include="LastUse\ComboLastUseFile.cpp" />
     <ClCompile Include="LastUse\EmojiLastUseFile.cpp" />
+    <ClCompile Include="Migration\LegacyMigrationCore.cpp" />
+    <ClCompile Include="Migration\LegacyMigrationManager.cpp" />
     <ClCompile Include="LatestVersionInfo.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainWindow.cpp" />
@@ -356,6 +359,8 @@
     <ClInclude Include="KeyboardMapper.h" />
     <ClInclude Include="LastUse\ComboLastUseFile.h" />
     <ClInclude Include="LastUse\EmojiLastUseFile.h" />
+    <ClInclude Include="Migration\LegacyMigrationCore.h" />
+    <ClInclude Include="Migration\LegacyMigrationManager.h" />
     <ClInclude Include="Picker\PickerSortFilterProxyModel.h" />
     <QtMoc Include="Picker\PickerWindow.h" />
     <ClInclude Include="Picker\PickerWindowMoverResizer.h" />
@@ -396,11 +401,6 @@
       <ForceInclude Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h;../../Update/%(Filename)%(Extension)</ForceInclude>
     </QtMoc>
     <ClInclude Include="Backup\BackupManager.h" />
-    <QtMoc Include="Backup\BackupRestoreDialog.h">
-      <ForceInclude Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h;../../Backup/%(Filename)%(Extension)</ForceInclude>
-      <ForceInclude Condition="'$(Configuration)|$(Platform)'=='DebugRemote|x64'">stdafx.h;../../Backup/%(Filename)%(Extension)</ForceInclude>
-      <ForceInclude Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h;../../Backup/%(Filename)%(Extension)</ForceInclude>
-    </QtMoc>
     <ClInclude Include="BeeftextConstants.h" />
     <ClInclude Include="BeeftextGlobals.h" />
     <ClInclude Include="BeeftextUtils.h" />
@@ -430,6 +430,11 @@
       <ForceInclude Condition="'$(Configuration)|$(Platform)'=='DebugRemote|x64'">stdafx.h;../../Combo/%(Filename)%(Extension)</ForceInclude>
       <ForceInclude Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h;../../Combo/%(Filename)%(Extension)</ForceInclude>
     </QtMoc>
+    <QtMoc Include="Combo\ComboExportDialog.h">
+      <ForceInclude Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h;../../Combo/%(Filename)%(Extension)</ForceInclude>
+      <ForceInclude Condition="'$(Configuration)|$(Platform)'=='DebugRemote|x64'">stdafx.h;../../Combo/%(Filename)%(Extension)</ForceInclude>
+      <ForceInclude Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h;../../Combo/%(Filename)%(Extension)</ForceInclude>
+    </QtMoc>
     <QtMoc Include="Combo\ComboFrame.h">
       <ForceInclude Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h;../../Combo/%(Filename)%(Extension)</ForceInclude>
       <ForceInclude Condition="'$(Configuration)|$(Platform)'=='DebugRemote|x64'">stdafx.h;../../Combo/%(Filename)%(Extension)</ForceInclude>
@@ -441,6 +446,7 @@
       <ForceInclude Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h;../../Combo/%(Filename)%(Extension)</ForceInclude>
     </QtMoc>
     <ClInclude Include="Combo\ComboKeywordValidator.h" />
+    <ClInclude Include="Combo\ComboPortability.h" />
     <ClInclude Include="Combo\ComboVariable.h" />
     <QtMoc Include="MainWindow.h">
       <ForceInclude Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h;../../%(Filename)%(Extension)</ForceInclude>
@@ -511,9 +517,6 @@
     </QtUic>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resources\StyleCommon.qss" />
-    <None Include="Resources\StyleDark.qss" />
-    <None Include="Resources\StyleLight.qss" />
     <None Include="Resources\StyleNoCustom.qss" />
     <None Include="Translations\beeftext_de_DE.ts" />
     <None Include="Translations\beeftext_it_IT.ts" />
@@ -531,12 +534,10 @@
     </QtUic>
     <QtUic Include="Group\GroupListWidget.ui">
     </QtUic>
-    <QtUic Include="Backup\BackupRestoreDialog.ui">
-    </QtUic>
     <None Include="Translations\beeftext_fr_FR.ts" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="Resources\BeeftextIcon.ico" />
+    <Image Include="Resources\Icons\LeanBeeftextApp.ico" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Submodules\XMiLib\XMiLib\XMiLib.vcxproj">

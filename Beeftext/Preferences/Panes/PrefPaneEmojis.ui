@@ -129,7 +129,7 @@
      <item>
       <widget class="QCheckBox" name="checkShowEmojiInPickerWindow">
        <property name="text">
-        <string>Show emojis in picker window</string>
+        <string>Show emojis in Quick Search</string>
        </property>
       </widget>
      </item>

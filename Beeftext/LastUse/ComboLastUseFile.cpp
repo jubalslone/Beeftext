@@ -55,7 +55,7 @@ void parseDateTimeObject(ComboList &comboList, QJsonObject const &object) {
 //****************************************************************************************************************************************************
 void upgradeLegacyFileNameIfNecessary() {
     QDir const oldDir(PreferencesManager::instance().comboListFolderPath());
-    QString const newFilePath = QDir(globals::appDataDir()).absoluteFilePath(kComboLastUseFileName);
+    QString const newFilePath = QDir(globals::machineLocalDataDir()).absoluteFilePath(kComboLastUseFileName);
     QFile const newFile(newFilePath);
     QFile oldFile(oldDir.absoluteFilePath(kLegacyComboLastUseFileName));
     if (newFile.exists()) {
@@ -79,7 +79,7 @@ void loadComboLastUseDateTimes(ComboList &comboList) {
     try {
         upgradeLegacyFileNameIfNecessary();
         QString const invalidFileStr = "The combo last use file is invalid.";
-        QFile file = QDir(globals::appDataDir()).absoluteFilePath(kComboLastUseFileName);
+        QFile file = QDir(globals::machineLocalDataDir()).absoluteFilePath(kComboLastUseFileName);
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
             throw Exception("Could not save the combo last use date/time file.");
         QJsonParseError jsonError {};
@@ -123,13 +123,15 @@ void saveComboLastUseDateTimes(ComboList const &comboList) {
         }
         rootObject.insert(kPropDateTimes, dateTimes);
 
-        QFile file = QDir(globals::appDataDir()).absoluteFilePath(kComboLastUseFileName);
+        QSaveFile file(QDir(globals::machineLocalDataDir()).absoluteFilePath(kComboLastUseFileName));
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
             throw Exception("Could not save last use date/time file.");
 
         QByteArray const data = QJsonDocument(rootObject).toJson();
         if (data.size() != file.write(data))
             throw Exception("An error occurred while writing the last use date/time file.");
+        if (!file.commit())
+            throw Exception("An error occurred while committing the last use date/time file.");
     }
     catch (Exception const &e) {
         globals::debugLog().addError(e.qwhat());

@@ -13,6 +13,6 @@ assignees: ''
 
 #### Steps to reproduce the behavior
 
-#### Beeftext version (e.g. Beeftext v7.0 Portable Edition).
+#### Lean Beeftext version (for example, Lean Beeftext 1.0.0 Portable Edition)
 
 #### Operating system version (e.g Windows 10)

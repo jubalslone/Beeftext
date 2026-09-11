@@ -11,7 +11,6 @@
 #include "PickerItemDelegate.h"
 #include "Combo/Combo.h"
 #include "Emoji/Emoji.h"
-#include "Preferences/PreferencesManager.h"
 #include "BeeftextConstants.h"
 
 
@@ -51,13 +50,11 @@ QFont smallFont() {
 /// \param[in] index The index of the item to paint.
 //****************************************************************************************************************************************************
 void PickerItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const {
-    PreferencesManager const &prefs = PreferencesManager::instance();
-    bool const light = ((!prefs.useCustomTheme()) || (ETheme::Light == prefs.theme()));
-    QColor const bgColor = light ? QColor(0xff, 0xff, 0xff) : QColor(0x21, 0x21, 0x21);
-    QColor const bgSelectedColor(0x50, 0x8c, 0xc8);
-    QColor const bigTextColor = light ? QColor(0x4e, 0x4e, 0x4e) : QColor(0xee, 0xee, 0xee);
-    QColor const bigTextSelectedColor(0xff, 0xff, 0xff);
-    QColor const smallTextColor(0xc8, 0xc8, 0xc8);
+    QColor const bgColor = option.palette.color(QPalette::Base);
+    QColor const bgSelectedColor = option.palette.color(QPalette::Highlight);
+    QColor const bigTextColor = option.palette.color(QPalette::Text);
+    QColor const bigTextSelectedColor = option.palette.color(QPalette::HighlightedText);
+    QColor const smallTextColor = option.palette.color(QPalette::PlaceholderText);
 
     bool const isEmoji = (constants::Emoji == index.data(constants::TypeRole).value<constants::EITemType>());
     SpEmoji emoji = isEmoji ? index.data(constants::PointerRole).value<SpEmoji>() : nullptr;
@@ -89,7 +86,7 @@ void PickerItemDelegate::paint(QPainter *painter, const QStyleOptionViewItem &op
     painter->setPen(selected ? bigTextSelectedColor : bigTextColor);
     painter->drawText(QPoint(rect.left(), nameYPos), nameText);
 
-    painter->setPen(smallTextColor);
+    painter->setPen(selected ? bigTextSelectedColor : smallTextColor);
     painter->setFont(sFont);
     QFontMetrics const sMetrics(sFont);
 
@@ -117,5 +114,4 @@ QSize PickerItemDelegate::sizeHint(const QStyleOptionViewItem &option, QModelInd
     return QSize(option.rect.width(), QFontMetrics(bigFont()).height() + QFontMetrics(smallFont()).height()
                                       + 2 * kItemVMargin);
 }
-
 

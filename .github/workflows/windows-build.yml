@@ -1,0 +1,354 @@
+name: Windows distributions
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, test, and package Lean Beeftext 1.0
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out exact source commit and submodules
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify source identity and cleanliness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = '${{ github.event.pull_request.head.sha || github.sha }}'
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $expected) {
+            throw "Checked out $actual, expected $expected."
+          }
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The checked-out source tree has unstaged tracked changes.' }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The checked-out source tree has staged changes.' }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'A submodule has unstaged tracked changes.' }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'A submodule has staged changes.' }
+
+      - name: Install Qt 6.8 LTS
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.8.*'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+          setup-python: true
+
+      - name: Configure CMake
+        shell: pwsh
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+
+      - name: Build Release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $output = @(& cmake --build build --config Release --parallel -- /nologo /verbosity:minimal 2>&1)
+          $exitCode = $LASTEXITCODE
+          $output | ForEach-Object { $_.ToString() } | Set-Content -LiteralPath build-output.log
+          if ($exitCode -ne 0) {
+            $output | Select-Object -Last 180 | ForEach-Object { Write-Host $_.ToString() }
+            exit $exitCode
+          }
+
+      - name: Run complete automated test suite
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C Release --verbose 2>&1 | Tee-Object -FilePath test-output.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify build did not rewrite tracked source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The build modified tracked source.' }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'The build staged source changes.' }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'The build modified a submodule.' }
+          git submodule foreach --recursive 'git diff --cached --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'The build staged submodule changes.' }
+
+      - name: Stage installed and portable payloads
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $commit = (git rev-parse HEAD).Trim()
+          & ./Installer/StagePayload.ps1 -Mode Installed -BuildDirectory ./build `
+            -Destination ./Installer/_staging/installed -SourceCommit $commit `
+            -Repository $env:GITHUB_REPOSITORY -WorkflowRun $env:GITHUB_RUN_ID
+          & ./Installer/StagePayload.ps1 -Mode Portable -BuildDirectory ./build `
+            -Destination ./artifact/Lean-Beeftext-Portable -SourceCommit $commit `
+            -Repository $env:GITHUB_REPOSITORY -WorkflowRun $env:GITHUB_RUN_ID
+
+      - name: Verify staged provenance, manifests, and mode isolation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          function Test-Payload([string]$Path, [string]$Mode) {
+            $commit = (git rev-parse HEAD).Trim()
+            $buildInfo = Get-Content -LiteralPath (Join-Path $Path 'BUILD_INFO.txt') -Raw
+            if ($buildInfo -notmatch '(?m)^Product: Lean Beeftext 1\.0\.0\r?$') { throw "$Mode product provenance is missing." }
+            if ($buildInfo -notmatch "(?m)^Distribution: $Mode\r?$") { throw "$Mode distribution provenance is missing." }
+            if ($buildInfo -notmatch '(?m)^Repository: jubalslone/lean-beeftext\r?$') { throw "$Mode repository provenance is wrong." }
+            if ($buildInfo -notmatch "(?m)^Source commit: $([regex]::Escape($commit))\r?$") { throw "$Mode source provenance is wrong." }
+            $checksumPath = Join-Path $Path 'SHA256SUMS.txt'
+            $checksumFullPath = [IO.Path]::GetFullPath($checksumPath)
+            $lines = @(Get-Content -LiteralPath $checksumPath)
+            $files = @(Get-ChildItem -Path $Path -Recurse -File | Where-Object { $_.FullName -ne $checksumFullPath })
+            if ($lines.Count -ne $files.Count) { throw "$Mode manifest entry count is wrong." }
+            $forbiddenExtensions = @('.pdb', '.ilk', '.exp', '.lib', '.obj', '.cpp', '.c', '.cc', '.h', '.hpp', '.ui', '.sln', '.vcxproj', '.cmake', '.bat', '.cmd', '.ps1')
+            foreach ($file in $files) {
+              if ($forbiddenExtensions -contains $file.Extension.ToLowerInvariant()) {
+                throw "Forbidden development/debug payload file in $Mode staging: $($file.FullName)"
+              }
+              if (($file.Extension -ieq '.exe') -and ($file.Name -ine 'LeanBeeftext.exe')) {
+                throw "Unexpected executable in $Mode staging: $($file.FullName)"
+              }
+              if ($file.Name -match '^(?<base>.+)d\.dll$' -and
+                (Test-Path -LiteralPath (Join-Path $file.DirectoryName ($Matches['base'] + '.dll')))) {
+                throw "Qt debug DLL has a release counterpart in $Mode staging: $($file.FullName)"
+              }
+            }
+            foreach ($runtimeDll in @('MSVCP140.dll', 'VCRUNTIME140.dll', 'VCRUNTIME140_1.dll')) {
+              if (-not (Test-Path -LiteralPath (Join-Path $Path $runtimeDll) -PathType Leaf)) {
+                throw "$Mode payload is missing required runtime dependency $runtimeDll."
+              }
+            }
+            foreach ($line in $lines) {
+              if ($line -cnotmatch '^([0-9a-f]{64})  (.+)$') { throw "Malformed $Mode manifest entry: $line" }
+              $file = Join-Path $Path $Matches[2]
+              if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Missing $Mode payload file: $($Matches[2])" }
+              $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($actual -cne $Matches[1]) { throw "$Mode SHA-256 mismatch: $($Matches[2])" }
+            }
+          }
+          Test-Payload ./Installer/_staging/installed Installed
+          Test-Payload ./artifact/Lean-Beeftext-Portable Portable
+          if (Test-Path ./Installer/_staging/installed/Portable.bin) { throw 'Installed payload contains Portable.bin.' }
+          if (Test-Path ./Installer/_staging/installed/PortableApps.bin) { throw 'Installed payload contains PortableApps.bin.' }
+          if (-not (Test-Path ./artifact/Lean-Beeftext-Portable/Portable.bin)) { throw 'Portable payload is missing Portable.bin.' }
+          Compress-Archive -Path ./artifact/Lean-Beeftext-Portable/* `
+            -DestinationPath ./artifact/Lean-Beeftext-1.0.0-portable-windows-x64.zip -CompressionLevel Optimal -Force
+
+      - name: Record installed payload audit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = (Resolve-Path ./Installer/_staging/installed).Path
+          $files = @(Get-ChildItem -LiteralPath $root -Recurse -File)
+          $categories = [ordered]@{
+            'Lean executable' = [long]0
+            'Qt runtime DLLs' = [long]0
+            'Qt graphics support' = [long]0
+            'Qt plugins' = [long]0
+            'MSVC runtime' = [long]0
+            'Translations' = [long]0
+            'Resources, documentation, and provenance' = [long]0
+          }
+          foreach ($file in $files) {
+            $relative = [IO.Path]::GetRelativePath($root, $file.FullName).Replace('\', '/')
+            $name = $file.Name.ToLowerInvariant()
+            if ($name -eq 'leanbeeftext.exe') { $category = 'Lean executable' }
+            elseif ($name -match '^qt6.*\.dll$') { $category = 'Qt runtime DLLs' }
+            elseif ($name -in @('opengl32sw.dll', 'd3dcompiler_47.dll')) { $category = 'Qt graphics support' }
+            elseif (($relative -match '/') -and ($file.Extension -ieq '.dll')) { $category = 'Qt plugins' }
+            elseif ($name -match '^(msvcp|vcruntime|vccorlib|concrt).*\.dll$') { $category = 'MSVC runtime' }
+            elseif ($relative.StartsWith('translations/', [StringComparison]::OrdinalIgnoreCase)) { $category = 'Translations' }
+            else { $category = 'Resources, documentation, and provenance' }
+            $categories[$category] += [long]$file.Length
+          }
+          $audit = [Collections.Generic.List[string]]::new()
+          $audit.Add("Installed payload bytes: $([long](($files | Measure-Object Length -Sum).Sum))")
+          $audit.Add("Installed payload files: $($files.Count)")
+          $audit.Add('')
+          $audit.Add('Category bytes:')
+          foreach ($entry in $categories.GetEnumerator()) { $audit.Add("$($entry.Key): $($entry.Value)") }
+          $audit.Add('')
+          $audit.Add('Top 15 largest files:')
+          foreach ($file in ($files | Sort-Object Length -Descending | Select-Object -First 15)) {
+            $relative = [IO.Path]::GetRelativePath($root, $file.FullName).Replace('\', '/')
+            $audit.Add("$($file.Length)  $relative")
+          }
+          $duplicates = @($files | ForEach-Object {
+            [pscustomobject]@{ Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash; Path = $_.FullName; Length = $_.Length }
+          } | Group-Object Hash | Where-Object Count -gt 1)
+          $audit.Add('')
+          $audit.Add("Identical-file duplicate groups: $($duplicates.Count)")
+          foreach ($duplicate in $duplicates) {
+            $audit.Add("SHA-256 $($duplicate.Name):")
+            foreach ($item in $duplicate.Group) {
+              $relative = [IO.Path]::GetRelativePath($root, $item.Path).Replace('\', '/')
+              $audit.Add("$($item.Length)  $relative")
+            }
+          }
+          $audit | Set-Content -LiteralPath ./artifact/INSTALLED_PAYLOAD_AUDIT.txt -Encoding utf8
+          $audit | Write-Output
+
+      - name: Install pinned Inno Setup 7.1.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $download = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          $installDirectory = Join-Path $env:RUNNER_TEMP 'Inno Setup 7'
+          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $download
+          $expected = '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f'
+          $actual = (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -cne $expected) { throw "Inno Setup download hash mismatch: $actual" }
+          $process = Start-Process -FilePath $download -ArgumentList @(
+            '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$installDirectory`""
+          ) -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed with exit code $($process.ExitCode)." }
+          $compiler = Join-Path $installDirectory 'ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler)) { throw 'Pinned Inno compiler was not installed.' }
+          "INNO_COMPILER=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Compile Lean installer
+        shell: pwsh
+        run: |
+          & $env:INNO_COMPILER ./Installer/LeanBeeftext.iss 2>&1 | Tee-Object -FilePath installer-build-output.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path ./Installer/_output/Lean-Beeftext-Setup-1.0.0.exe)) { throw 'Inno did not produce the expected installer.' }
+
+      - name: Exercise install, reinstall, and data-preserving uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = (Resolve-Path ./Installer/_output/Lean-Beeftext-Setup-1.0.0.exe).Path
+          $installDirectory = Join-Path $env:ProgramFiles 'Lean Beeftext'
+          $documents = [Environment]::GetFolderPath([Environment+SpecialFolder]::MyDocuments)
+          $dataDirectory = Join-Path $documents 'Lean Beeftext'
+          New-Item -ItemType Directory -Path $dataDirectory -Force | Out-Null
+          $fixture = Join-Path $dataDirectory 'ci-user-data-preserved.txt'
+          'preserve across uninstall' | Set-Content -LiteralPath $fixture -Encoding ascii
+
+          function Invoke-Setup {
+            $process = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+            if ($process.ExitCode -ne 0) { throw "Lean Setup failed with exit code $($process.ExitCode)." }
+          }
+          Invoke-Setup
+          if (-not (Test-Path -LiteralPath (Join-Path $installDirectory 'LeanBeeftext.exe'))) { throw 'Installed executable is missing.' }
+          if (Test-Path -LiteralPath (Join-Path $installDirectory 'Portable.bin')) { throw 'Installed application became portable.' }
+          if (Test-Path -LiteralPath (Join-Path $installDirectory 'PortableApps.bin')) { throw 'Installed application contains PortableApps.bin.' }
+          $uninstallKey = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{499E5EE9-ECC6-455E-B78A-EDF581715A80}_is1'
+          if (-not (Test-Path -LiteralPath $uninstallKey)) { throw 'Lean uninstall registration is missing.' }
+
+          Invoke-Setup
+          if (-not (Test-Path -LiteralPath (Join-Path $installDirectory 'LeanBeeftext.exe'))) { throw 'Same-version reinstall removed the application.' }
+
+          $uninstaller = Join-Path $installDirectory 'unins000.exe'
+          if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'Lean uninstaller is missing.' }
+
+          # Use a bounded, synthetic process at the exact installed path to prove that silent
+          # uninstall fails closed without requiring the GUI application to run on the CI desktop.
+          $installedExecutable = Join-Path $installDirectory 'LeanBeeftext.exe'
+          $savedExecutable = Join-Path $installDirectory 'LeanBeeftext.exe.product'
+          Move-Item -LiteralPath $installedExecutable -Destination $savedExecutable
+          Copy-Item -LiteralPath (Join-Path $env:WINDIR 'System32\ping.exe') -Destination $installedExecutable
+          $runningFixture = Start-Process -FilePath $installedExecutable -ArgumentList @('-n', '8', '127.0.0.1') -PassThru
+          Start-Sleep -Milliseconds 500
+          try {
+            $blockedUninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+            if ($blockedUninstall.ExitCode -eq 0) { throw 'Silent uninstall proceeded while the exact installed Lean process path was running.' }
+            if (-not (Test-Path -LiteralPath $installDirectory)) { throw 'Blocked silent uninstall changed the installed payload.' }
+          }
+          finally {
+            if (-not $runningFixture.WaitForExit(15000)) { throw 'Bounded running-process fixture did not exit normally.' }
+            Remove-Item -LiteralPath $installedExecutable -Force
+            Move-Item -LiteralPath $savedExecutable -Destination $installedExecutable
+          }
+
+          $process = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Lean uninstall failed with exit code $($process.ExitCode)." }
+          for ($attempt = 0; $attempt -lt 20 -and (Test-Path -LiteralPath $installDirectory); ++$attempt) { Start-Sleep -Milliseconds 500 }
+          if (Test-Path -LiteralPath $installDirectory) { throw 'Program Files payload survived uninstall.' }
+          if (Test-Path -LiteralPath $uninstallKey) { throw 'Uninstall registration survived uninstall.' }
+          if (-not (Test-Path -LiteralPath $fixture)) { throw 'Documents user-data fixture was deleted by uninstall.' }
+
+      - name: Record distribution hashes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $portableZip = './artifact/Lean-Beeftext-1.0.0-portable-windows-x64.zip'
+          $portableExe = './artifact/Lean-Beeftext-Portable/LeanBeeftext.exe'
+          $installer = './Installer/_output/Lean-Beeftext-Setup-1.0.0.exe'
+          $installedExe = './Installer/_staging/installed/LeanBeeftext.exe'
+          @(
+            "$((Get-FileHash -LiteralPath $portableZip -Algorithm SHA256).Hash.ToLowerInvariant())  Lean-Beeftext-1.0.0-portable-windows-x64.zip"
+            "$((Get-FileHash -LiteralPath $portableExe -Algorithm SHA256).Hash.ToLowerInvariant())  portable/LeanBeeftext.exe"
+            "$((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant())  Lean-Beeftext-Setup-1.0.0.exe"
+            "$((Get-FileHash -LiteralPath $installedExe -Algorithm SHA256).Hash.ToLowerInvariant())  installed/LeanBeeftext.exe"
+          ) | Set-Content -LiteralPath ./artifact/DISTRIBUTION_SHA256SUMS.txt -Encoding ascii
+          Copy-Item -LiteralPath $installer -Destination ./artifact/Lean-Beeftext-Setup-1.0.0.exe
+          Get-Content -LiteralPath ./artifact/DISTRIBUTION_SHA256SUMS.txt
+
+      - name: Verify tracked source remains clean after packaging
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git diff --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging modified tracked source.' }
+          git diff --cached --exit-code
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging staged tracked source.' }
+          git submodule foreach --recursive 'git diff --exit-code'
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging modified a submodule.' }
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Lean-Beeftext-1.0.0-build-diagnostics
+          path: |
+            build-output.log
+            test-output.log
+            installer-build-output.log
+            Installer/_output/*.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload portable distribution
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Lean-Beeftext-1.0.0-portable-windows-x64
+          path: |
+            artifact/Lean-Beeftext-1.0.0-portable-windows-x64.zip
+            artifact/DISTRIBUTION_SHA256SUMS.txt
+            artifact/INSTALLED_PAYLOAD_AUDIT.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload installed distribution
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: Lean-Beeftext-Setup-1.0.0
+          path: |
+            artifact/Lean-Beeftext-Setup-1.0.0.exe
+            artifact/DISTRIBUTION_SHA256SUMS.txt
+            artifact/INSTALLED_PAYLOAD_AUDIT.txt
+          if-no-files-found: error
+          retention-days: 14

@@ -31,6 +31,12 @@ PrefPaneBehavior::PrefPaneBehavior(QWidget *parent)
     : PrefPane(parent)
     , prefs_(PreferencesManager::instance()) {
     ui_.setupUi(this);
+    if (constants::kRestrictedBuild) {
+        ui_.checkAutoCheckForUpdates->setVisible(false);
+        ui_.buttonCheckNow->setVisible(false);
+        ui_.labelUpdateCheckStatus->setVisible(false);
+    }
+    ui_.groupMultilineSnippets->setVisible(constants::kRestrictedBuild);
     this->updateCheckStatusTimer_.setSingleShot(true);
     connect(&updateCheckStatusTimer_, &QTimer::timeout, [&]() { ui_.labelUpdateCheckStatus->setText(QString()); });
     ui_.labelUpdateCheckStatus->setText(QString());
@@ -48,9 +54,10 @@ PrefPaneBehavior::PrefPaneBehavior(QWidget *parent)
     connect(ui_.checkAppEnableDisable, &QCheckBox::toggled, this, &PrefPaneBehavior::onCheckEnableAppEnableDisableShortcut);
     connect(ui_.checkAutoCheckForUpdates, &QCheckBox::toggled, this, &PrefPaneBehavior::onCheckAutoCheckForUpdates);
     connect(ui_.checkAutoStart, &QCheckBox::toggled, this, &PrefPaneBehavior::onCheckAutoStart);
+    connect(ui_.radioAllowRealLineBreaks, &QRadioButton::toggled, this,
+            &PrefPaneBehavior::onAllowRealLineBreaksChanged);
     connect(ui_.checkPlaySoundOnCombo, &QCheckBox::toggled, this, &PrefPaneBehavior::onCheckPlaySoundOnCombo);
     connect(ui_.checkUseCustomSound, &QCheckBox::toggled, this, &PrefPaneBehavior::onCheckUseCustomSound);
-
 
 
 
@@ -67,9 +74,14 @@ PrefPaneBehavior::PrefPaneBehavior(QWidget *parent)
 //****************************************************************************************************************************************************
 void PrefPaneBehavior::load() const {
     QSignalBlocker blocker(ui_.checkAutoCheckForUpdates);
-    ui_.checkAutoCheckForUpdates->setChecked(prefs_.autoCheckForUpdates());
+    ui_.checkAutoCheckForUpdates->setChecked(constants::kRestrictedBuild ? false : prefs_.autoCheckForUpdates());
     blocker = QSignalBlocker(ui_.checkAutoStart);
     ui_.checkAutoStart->setChecked(prefs_.autoStartAtLogin());
+    QSignalBlocker const allowLineBreaksBlocker(ui_.radioAllowRealLineBreaks);
+    QSignalBlocker const visibleLineBreaksBlocker(ui_.radioShowVisibleLineBreaks);
+    bool const allowRealLineBreaks = prefs_.allowRealLineBreaksInSnippets();
+    ui_.radioAllowRealLineBreaks->setChecked(allowRealLineBreaks);
+    ui_.radioShowVisibleLineBreaks->setChecked(!allowRealLineBreaks);
     blocker = QSignalBlocker(ui_.checkPlaySoundOnCombo);
     ui_.checkPlaySoundOnCombo->setChecked(prefs_.playSoundOnCombo());
     blocker = QSignalBlocker(ui_.checkUseCustomSound);
@@ -144,7 +156,8 @@ void PrefPaneBehavior::onUpdateCheckFailed() {
 /// \param[in] checked Is the radio button checked
 //****************************************************************************************************************************************************
 void PrefPaneBehavior::onCheckAutoCheckForUpdates(bool checked) const {
-    prefs_.setAutoCheckForUpdates(checked);
+    if (!constants::kRestrictedBuild)
+        prefs_.setAutoCheckForUpdates(checked);
 }
 
 
@@ -154,6 +167,15 @@ void PrefPaneBehavior::onCheckAutoCheckForUpdates(bool checked) const {
 void PrefPaneBehavior::onCheckAutoStart(bool checked) const {
     if (!isInPortableMode())
         prefs_.setAutoStartAtLogin(checked);
+}
+
+
+//****************************************************************************************************************************************************
+/// \param[in] checked Whether real line breaks are selected.
+//****************************************************************************************************************************************************
+void PrefPaneBehavior::onAllowRealLineBreaksChanged(bool checked) const {
+    if constexpr (constants::kRestrictedBuild)
+        prefs_.setAllowRealLineBreaksInSnippets(checked);
 }
 
 
@@ -264,5 +286,3 @@ bool PrefPaneBehavior::validateInput() {
     }
     return true;
 }
-
-

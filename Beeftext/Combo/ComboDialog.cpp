@@ -13,7 +13,6 @@
 #include "MatchingMode.h"
 #include "CaseSensitivity.h"
 #include "BeeftextUtils.h"
-#include "BeeftextConstants.h"
 #include "Group/GroupDialog.h"
 #include "Preferences/PreferencesManager.h"
 #include <XMiLib/Exception.h>
@@ -27,9 +26,8 @@ namespace {
 //****************************************************************************************************************************************************
 QString variablesLabel() {
     return QObject::tr(R"(
-      <html><head/><body><p><a href="https://github.com/xmichelo/Beeftext/wiki/Variables">
-      <span style=" text-decoration: underline; color:#%1;">
-      About variables</span></a></p></body></html>)").arg(colorToHex(constants::blueBeeftextColor, false));
+      <html><head/><body><p><a href="https://github.com/jubalslone/lean-beeftext#variables">
+      About variables</a></p></body></html>)");
 }
 
 
@@ -146,7 +144,7 @@ bool ComboDialog::checkAndReportInvalidCombo() {
     ComboList const &comboList = ComboManager::instance().comboListRef();
     if ((!newKeyword.isEmpty()) && (comboList.end() != std::find_if(comboList.begin(), comboList.end(), [&](SpCombo const &existing) -> bool { return (existing != combo_) && (existing->keyword() == newKeyword); })))
         return questionDialog(this, tr("Duplicate keyword"), tr("This keyword is already in use. \n\n"
-                                                                "You can have multiple combos with the same keyword, Beeftext will pick one of the matching combos "
+                                                                "You can have multiple combos with the same keyword, Lean Beeftext will pick one of the matching combos "
                                                                 "randomly."), tr("&Continue"), tr("C&ancel"));
 
     // we check for conflicts that would make some combo 'unreachable'

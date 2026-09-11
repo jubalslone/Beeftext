@@ -1,0 +1,104 @@
+name: Azure signing smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  signing-smoke-test:
+    name: Verify Azure OIDC and Artifact Signing
+    runs-on: windows-2022
+    environment: production-signing
+
+    steps:
+      - name: Azure login with OIDC
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Confirm Azure identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          az account show --query '{subscription:name, tenant:tenantId}' -o table
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Azure OIDC login did not produce a usable Azure CLI session.'
+          }
+
+      - name: Build disposable signing target
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet new console --framework net8.0 --output signing-test --force
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not create disposable signing project.'
+          }
+
+          @'
+          using System;
+
+          internal static class Program
+          {
+          	private static void Main()
+          	{
+          		Console.WriteLine("Lean Beeftext Artifact Signing smoke test");
+          	}
+          }
+          '@ | Set-Content -LiteralPath signing-test\Program.cs -Encoding utf8
+
+          dotnet publish signing-test\signing-test.csproj `
+            --configuration Release `
+            --runtime win-x64 `
+            --self-contained false `
+            -p:UseAppHost=true `
+            --output signing-test\publish
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not build disposable signing target.'
+          }
+
+          $exe = Join-Path $PWD 'signing-test\publish\signing-test.exe'
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+            throw "Disposable signing target was not produced: $exe"
+          }
+
+          $before = Get-AuthenticodeSignature -FilePath $exe
+          Write-Host "Pre-sign status: $($before.Status)"
+
+      - name: Sign disposable executable
+        uses: Azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\signing-test\publish\signing-test.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Authenticode signature and timestamp
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path $PWD 'signing-test\publish\signing-test.exe'
+          $signature = Get-AuthenticodeSignature -FilePath $exe
+
+          Write-Host "Signature status: $($signature.Status)"
+          Write-Host "Signer subject: $($signature.SignerCertificate.Subject)"
+          Write-Host "Timestamp subject: $($signature.TimeStamperCertificate.Subject)"
+
+          if ($signature.Status -ne 'Valid') {
+            throw "Artifact Signing smoke test failed: Authenticode status is $($signature.Status)."
+          }
+          if (-not $signature.TimeStamperCertificate) {
+            throw 'Artifact Signing smoke test failed: no RFC 3161 timestamp certificate was found.'
+          }
+
+      - name: Azure logout
+        if: always()
+        shell: pwsh
+        run: az logout

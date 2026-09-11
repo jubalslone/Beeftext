@@ -14,6 +14,7 @@
 #include "ui_ComboImportDialog.h"
 #include "ComboList.h"
 #include "Group/Group.h"
+#include "Group/GroupList.h"
 
 
 //****************************************************************************************************************************************************
@@ -56,6 +57,8 @@ private: // data members
     ComboList importableCombos_; ///< The list of combos that can be imported as is
     ComboList conflictingNewerCombos_; ///< The list of conflicting combos with a newer modification date than the current one
     ComboList conflictingOlderCombos_; ///< The list of conflicting combos with an older modification date than the current one
+	GroupList importedGroups_; ///< Groups carried by a Lean combo bundle.
+	bool preserveImportedGroups_ { false }; ///< Whether imported Lean group membership should be preserved.
 };
 
 

@@ -10,6 +10,7 @@ PRECOMPILED_HEADER = stdafx.h
 include(Beeftext.pri)
 TRANSLATIONS += Translations/beeftext_fr.ts
 win32:RC_FILE = Beeftext.rc
+win32:LIBS += -lShell32 -lOle32
 
 win32:CONFIG(release, debug|release): LIBS += -L$$OUT_PWD/../Submodules/XMiLib/XMiLib/release/ -lXMiLib -lPsapi
 else:win32:CONFIG(debug, debug|release): LIBS += -L$$OUT_PWD/../Submodules/XMiLib/XMiLib/debug/ -lXMiLib -lPsapi

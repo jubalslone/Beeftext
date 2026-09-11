@@ -12,7 +12,6 @@
 
 
 #include "Shortcut.h"
-#include "Theme.h"
 #include "Combo/MatchingMode.h"
 #include "Combo/CaseSensitivity.h"
 #include <XMiLib/VersionNumber/VersionNumber.h>
@@ -36,10 +35,6 @@ public: // member functions
     QSettings &settings(); ///< Returns a reference the settings for the application.
     void init() const; ///< Initialize the preferences manager.
     void reset(); ///< Reset the preferences to their default values
-    bool save(QString const &path) const; ///< Save the preference to a JSON file.
-    bool load(QString const &path) const; ///< Load the preference from a JSON file.
-    void toJsonDocument(QJsonDocument &outDoc) const; ///< Copy the preferences to a JSON document.
-    void fromJsonDocument(QJsonDocument const &doc) const; ///< Load the preferences from a JSON document.
     void resetWarnings() const; ///< Reset the warnings
     void setAlreadyLaunched() const; ///< Set the value for the 'First Launch' preference to false
     bool alreadyLaunched() const; ///< Test whether this is the first time the application is launched
@@ -64,10 +59,10 @@ public: // member functions
     QString customSoundPath() const; ///< Set the value for the 'Custom sound path' preferences.
     void setAutoCheckForUpdates(bool value); ///< Set the value for the 'Auto check for updates preference
     bool autoCheckForUpdates() const; ///< Set the value for the 'Auto check for updates preference
-    void setUseCustomTheme(bool value) const; ///< Set the value for the 'Use custom theme' preference
-    bool useCustomTheme() const; ///< Get the value for the 'Use custom theme' preference
     void setUseAutomaticSubstitution(bool value) const; ///< Set the value for the 'Use automatic substitution' preference
     bool useAutomaticSubstitution() const; ///< Get the value for the 'Use automatic substitution' preference
+    void setAllowRealLineBreaksInSnippets(bool value) const; ///< Set whether restricted snippets may insert real line breaks.
+    bool allowRealLineBreaksInSnippets() const; ///< Get whether restricted snippets may insert real line breaks.
     void setComboTriggersOnSpace(bool value) const; ///< Set the value for the 'Combo triggers on space' preference.
     bool comboTriggersOnSpace() const; ///< Set the value for the 'Combo triggers on space' preference.
     void setKeepFinalSpaceCharacter(bool value) const; ///< Set the value for the 'Keep final space character' preference.
@@ -130,8 +125,6 @@ public: // member functions
     bool useCustomPowershellVersion() const; ///< Get the value for the 'Use custom PowerShell version'.
     void setCustomPowershellPath(QString const &path) const; ///< Set the value for the 'Custom PowerShell Path'.
     QString customPowershellPath() const; ///< Set the value for the 'Custom PowerShell Path'.
-    void setTheme(ETheme theme) const; ///< Set the theme parameter.
-    ETheme theme() const; ///< Get the theme.
     void setComboPickerWindowGeometry(QByteArray const &geometry) const; ///< Set the geometry of the combo picker window
     QByteArray comboPickerWindowGeometry() const; ///< Get the geometry of the combo picker.
     void setUseShiftInsertForPasting(bool value) const; ///< Get the value for the 'Shift+Insert for pasting' preference
@@ -164,6 +157,7 @@ private: // data members
 
     public: // data members
         bool useAutomaticSubstitution { true }; ///< Cached value for the 'use automatic substitution' preference value
+        bool allowRealLineBreaksInSnippets { false }; ///< Cached restricted multiline-snippet preference.
         bool comboTriggersOnSpace { false }; ///< Cached value for the 'combo trigger on space' preference.
         bool keepFinalSpaceCharacter { false }; ///< Cached value for the 'keep final space character' preference.
         SpShortcut comboTriggerShortcut; ///< Cached value for the 'combo trigger shortcut' preference
@@ -178,15 +172,12 @@ private: // data members
         QString emojiRightDelimiter; ///< Cached value for the 'emoji right delimiter' preference.
         bool showEmojisInPickerWindow { false }; ///< Cached value for the 'Show emojis in picker window' preference.
         bool beeftextEnabled { true }; ///< Cached value for the 'Beeftext enabled' preference.
-        bool useCustomTheme { true }; ///< Cached value for the 'Use custom theme' preference.
-        ETheme theme { ETheme::Light }; ///< Cached value for the 'Theme' preference.
         bool useShiftInsertForPasting { false }; ///< Cached value for use 'Use Shift+Insert for pasting' preference.
 
     private: // member functions
         void cacheComboTriggerShortcut(); ///< Read the combo trigger shortcut and cache it for faster access
         void cacheComboPickerShortcut(); ///< Read the combo picker shortcut and cache it for faster access
         void cacheAppEnableDisableShortcut(); ///< Read the app enable/disable shortcut and cache it for faster access.
-        void cacheThemePrefs(); ///< Read the theme and cache it for faster access.
         EMatchingMode readDefaultMatchingModeFromPreferences() const; ///< Get the value for the 'Default matching mode' preference.
         ECaseSensitivity readDefaultCaseSensitivityFromPreferences() const; ///< Get the value for the 'Default case sensitivity' preference.
 

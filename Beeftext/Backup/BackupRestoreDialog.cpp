@@ -56,7 +56,7 @@ void BackupRestoreDialog::onButtonRestore() {
     }
     catch (xmilib::Exception const &e) {
         globals::debugLog().addError(QString("Internal error: %1(): %2").arg(__FUNCTION__).arg(e.qwhat()));
-        QMessageBox::critical(this, tr("Error"), tr("The backup could not be restored."));
+        QMessageBox::critical(this, tr("Error"), tr("The combo backup could not be restored."));
     }
 }
 

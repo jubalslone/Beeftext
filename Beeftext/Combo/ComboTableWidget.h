@@ -71,8 +71,7 @@ private slots:
     void onActionSelectAll(); ///< Slot for the 'Select All' action
     void onActionDeselectAll(); ///< Slot for the 'Deselect All' action
     void onActionEnableDisableCombo(); ///< Slot for the 'Enable/Disable' action
-    void onActionExportCombo(); ///< Slot for the 'Export Combo' action
-    void onActionExportAllCombos(); ///< Slot for the 'Export All Combos' action
+    void onActionExportCombos(); ///< Slot for the 'Export Combos' action
     void onActionImportCombos(); ///< Slot for the 'Import Combos' action
     void onSearchFilterChanged(QString const &text); ///< Slot for the changing of the search field
     void onContextMenuRequested() const; ///< Slot for the combo table context menu
@@ -92,8 +91,7 @@ private: // data members
     QAction *actionEnableDisableCombo_ { nullptr }; ///< The 'Enable/Disable Combo' action.
     QAction *actionNewCombo_ { nullptr }; ///< The 'New Combo' action.
     QAction *actionSelectAll_ { nullptr }; ///< The 'Select All' action.
-    QAction *actionExportAllCombos_ { nullptr }; ///< The 'Export All Combos' action.
-    QAction *actionExportCombo_ { nullptr }; ///< The 'Export Combo' action.
+    QAction *actionExportCombos_ { nullptr }; ///< The 'Export Combos' action.
     QAction *actionImportCombos_ { nullptr }; ///< The 'Import Combo' action.
 
     ComboSortFilterProxyModel proxyModel_; ///< The proxy model for sorting/filtering the combo table
