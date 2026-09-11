@@ -4,7 +4,7 @@ This file identifies third-party work retained or shipped with Lean Beeftext. It
 
 ## Upstream Beeftext
 
-Lean Beeftext is based on [Beeftext 16.0](https://github.com/xmichelo/Beeftext), originally authored by Xavier Michelon and distributed under the MIT License. The upstream copyright and MIT terms are preserved in the repository's `LICENSE` file and source headers. The existing placeholder icon and other retained upstream project assets remain covered by those project terms until a separate asset pass replaces them.
+Lean Beeftext is based on [Beeftext 16.0](https://github.com/xmichelo/Beeftext), originally authored by Xavier Michelon and distributed under the MIT License. The upstream copyright and MIT terms are preserved in the repository's `LICENSE` file and source headers. Other retained upstream project assets remain covered by those project terms.
 
 ## Qt 6
 
