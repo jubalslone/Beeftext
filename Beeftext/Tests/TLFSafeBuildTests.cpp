@@ -1081,6 +1081,10 @@ void testProductionSigningArchitecture() {
 		&& production.contains("--signtool=leanartifact=$signToolCommand")
 		&& !routineWorkflow.contains("--define=ProductionSigning"),
 		"Inno's documented signing integration is enabled only for the production installer and generated uninstaller");
+	expect(production.contains("$wrapper = (Resolve-Path ./Installer/Invoke-ArtifactSigning.ps1).Path")
+		&& production.contains("-File `$q$wrapper`$q -FilePath `$f")
+		&& !production.contains("-File `\"$wrapper`\" -FilePath `$f"),
+		"the command-line Inno SignTool uses literal $q delimiters for the wrapper and literal $f for its quoted target");
 	expect(wrapper.contains("[string]$FilePath")
 		&& wrapper.contains("IndexOfAny([char[]]'*?')")
 		&& wrapper.contains("Resolve-Path -LiteralPath")
