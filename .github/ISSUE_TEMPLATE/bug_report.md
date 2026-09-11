@@ -7,7 +7,7 @@ assignees: ''
 
 ---
 
-> Do not include passwords, client data, private snippets, or exploit details. For potential security vulnerabilities, follow [SECURITY.md](../../SECURITY.md) instead of posting sensitive details publicly.
+> Do not include passwords, client data, private snippets, or exploit details. For potential security vulnerabilities, follow the [security policy](https://github.com/jubalslone/lean-beeftext/security/policy) instead of posting sensitive details publicly.
 
 ### Expected behavior
 
