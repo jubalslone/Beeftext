@@ -30,12 +30,14 @@ The protected environment supplies the Artifact Signing endpoint, account name, 
 
 The wrapper:
 
-- requires one explicit existing `.exe` path and rejects wildcards;
+- requires one explicit existing regular-file path and rejects wildcards;
+- canonicalizes the path, requires its parent to be the repository's dedicated `Installer\_output` directory, and rejects links or reparse points;
+- validates the DOS and PE signatures in the file itself instead of trusting a filename extension (Inno 7.1.0 signs its generated uninstaller as a temporary PE such as `uninst.e32.tmp`);
 - reads endpoint/account/profile only from the protected environment;
 - allows only the OIDC-backed Azure CLI credential path;
 - signs with SHA-256 and requests an RFC 3161 SHA-256 timestamp from `http://timestamp.acs.microsoft.com`;
 - refuses to append to an already valid signature; and
-- returns failure unless Windows reports a valid signature, signer certificate, and timestamp certificate.
+- returns failure unless the bytes changed and Windows reports a valid signature, signer certificate, and timestamp certificate.
 
 Inno Setup 7.1.0 receives the wrapper as the named `leanartifact` SignTool. The production-only `SignTool=leanartifact` and `SignedUninstaller=yes` directives cause Inno to sign both its generated uninstaller and final Setup executable through that same service. Routine unsigned QA compilation does not define `ProductionSigning`, so it does not invoke the production signer.
 
@@ -59,7 +61,9 @@ Every required Lean-owned PE must have `Get-AuthenticodeSignature` status `Valid
 
 `SHA256SUMS.txt` inside each payload is regenerated after the signed application bytes and signing provenance are final. `DISTRIBUTION_SHA256SUMS.txt` is generated only after the final installer and portable ZIP exist. Pre-signing hashes are not release hashes.
 
-The temporary manual `Azure signing smoke test` remains as the known-good OIDC and Microsoft action reference until the production workflow has completed successfully.
+Routine Windows CI parses every tracked PowerShell script with PowerShell's own language parser. The production and smoke workflows repeat that preflight before Azure authentication so executable signing code cannot reach credentials with a latent parser error.
+
+The manual `Azure signing smoke test` retains the known-good direct Microsoft action as a baseline and additionally compiles a disposable installer with pinned Inno Setup 7.1.0. That compile uses the same repository wrapper and literal Inno `$q` / `$f` SignTool command as production, with `SignedUninstaller=yes`. The workflow verifies the disposable Setup and installed `unins000.exe` signatures, signer identity, and timestamp certificates, then silently uninstalls and removes the disposable test identity. It does not build or publish a Lean Beeftext release candidate.
 
 ## What Authenticode does and does not establish
 
