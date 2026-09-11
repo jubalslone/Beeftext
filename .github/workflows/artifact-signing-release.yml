@@ -343,7 +343,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $wrapper = (Resolve-Path ./Installer/Invoke-ArtifactSigning.ps1).Path
-          $signToolCommand = "pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$wrapper`" -FilePath `$f"
+          $signToolCommand = "pwsh.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File `$q$wrapper`$q -FilePath `$f"
           & $env:INNO_COMPILER `
             '--define=ProductionSigning' `
             "--signtool=leanartifact=$signToolCommand" `
