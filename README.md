@@ -6,6 +6,15 @@ Type a short keyword and Lean Beeftext expands it into the text you use every da
 
 Lean Beeftext is built on a project we genuinely like. Beeftext provides a fast, practical local text-expansion workflow; Lean Beeftext adapts that foundation for environments where privacy, predictability, and a narrower execution surface matter more than extensibility.
 
+## Download
+
+The current public release is [Lean Beeftext 1.0.0](https://github.com/jubalslone/lean-beeftext/releases/tag/1.0.0), available as a normal Windows installer and a self-contained portable ZIP.
+
+- Installer: `Lean-Beeftext-Setup-1.0.0.exe`
+- Portable: `Lean-Beeftext-1.0.0-portable-windows-x64.zip`
+
+The Windows executables are Authenticode-signed and RFC 3161 timestamped through Microsoft Azure Artifact Signing. Because the signing identity and application are new, Microsoft Defender SmartScreen may initially show an unfamiliar-app warning while reputation accumulates. The release page publishes SHA-256 hashes for verification.
+
 ## Why Lean Beeftext?
 
 [Beeftext](https://github.com/xmichelo/Beeftext) is a capable open-source text expander. Lean Beeftext keeps its practical local workflow while choosing a deliberately narrower execution model for privacy-sensitive workflows.
@@ -28,7 +37,7 @@ Malformed, unknown, or deliberately blocked variable syntax remains visible as l
 
 ## Creating a Combo
 
-Open Lean Beeftext, choose **Combos > New**, then enter a keyword and snippet. For example, the keyword `myaddress` could expand to:
+Open Lean Beeftext, choose **Combos > New**, then enter a keyword and snippet. For example, the keyword `;addr` could expand to:
 
 ```text
 123 Example Street
@@ -36,6 +45,16 @@ Des Moines, IA 50309
 ```
 
 Save the combo, then type its keyword in a normal text field. Triggering can be automatic or manual, depending on your Preferences.
+
+### Choose a distinctive keyword
+
+For automatic substitution, strongly prefer a keyword that starts with a character or prefix you do not normally type as part of ordinary prose. This greatly reduces accidental expansions.
+
+Lean Beeftext accepts printable, non-whitespace characters in combo keywords, so punctuation prefixes are supported. Useful conventions include `;addr`, `$sig`, or `::meeting`. Pick one convention that fits the way you type and use it consistently across your combo library.
+
+There is no universally best prefix. A semicolon is convenient for many people, while `$` or `::` may be a poor choice if you frequently write code, shell commands, or other text where those characters are common. The important part is choosing something distinctive in your own workflow. Bare ordinary words such as `address`, `thanks`, or `meeting` are much more likely to expand unintentionally when automatic substitution is enabled.
+
+If you use manual triggering, accidental expansion is less likely, but a consistent prefix still makes combos easier to recognize, search, and remember.
 
 **Search** (`Ctrl+F`) filters and manages combos in the main window. **Quick Search** uses its separate global shortcut to open a small searchable overlay while you work in another application, then inserts the combo you choose.
 
@@ -136,7 +155,11 @@ This is a design boundary, not a claim of formal certification or absolute secur
 
 ## Project Status
 
-Lean Beeftext 1.0.0 is based on Beeftext 16.0. Functional Windows QA covers the restricted substitution model, multiline modes, combo portability, portable isolation, and the current Windows user interface. The repository builds both a normal Inno Setup installer and a portable package from the same tested commit. A protected manual workflow can build signed production candidates for further QA; no public signed 1.0.0 release or network updater exists yet.
+Lean Beeftext 1.0.0 is publicly released for Windows as both a signed installer and a portable ZIP. Both distributions come from the same reviewed source and contain the same signed `LeanBeeftext.exe`. The release process uses a protected manual production-signing workflow, Microsoft Azure Artifact Signing, final hash/provenance generation, and real-Windows QA before publication.
+
+There is intentionally no network updater. New releases are reviewed, signed, verified, and published explicitly rather than downloaded or installed automatically by the application.
+
+See the [latest release](https://github.com/jubalslone/lean-beeftext/releases/latest) for downloads and release hashes.
 
 ## Upstream Project
 
