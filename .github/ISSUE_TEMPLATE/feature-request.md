@@ -1,20 +1,23 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
+about: Suggest an idea for Lean Beeftext
 title: "[Feature] "
 labels: feature request
 assignees: ''
 
 ---
 
-**Is your feature request related to a problem? Please describe.**
-A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+### Problem or use case
+What problem would this solve, or what workflow would it improve?
 
-**Describe the solution you'd like**
-A clear and concise description of what you want to happen.
+### Proposed behavior
+What would you like Lean Beeftext to do?
 
-**Describe alternatives you've considered**
-A clear and concise description of any alternative solutions or features you've considered.
+### Alternatives considered
+Is there a current workflow, combo pattern, or external tool that partly solves the problem?
 
-**Additional context**
-Add any other context or screenshots about the feature request here.
+### Security and privacy fit
+Lean Beeftext deliberately keeps a narrow execution model. If the request would read external state, execute commands/scripts, automate arbitrary keys, or otherwise widen the boundaries in the [security model](https://github.com/jubalslone/lean-beeftext/blob/master/SECURITY_MODEL.md), explain why that tradeoff would be appropriate for this fork.
+
+### Additional context
+Add screenshots, examples, or other non-sensitive context that would help evaluate the request.

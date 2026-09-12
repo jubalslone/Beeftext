@@ -1,18 +1,30 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Report a reproducible Lean Beeftext problem
 title: "[Bug] "
 labels: bug
 assignees: ''
 
 ---
 
-#### Expected behavior
+> Do not include passwords, client data, private snippets, or exploit details. For potential security vulnerabilities, follow the [security policy](https://github.com/jubalslone/lean-beeftext/security/policy) instead of posting sensitive details publicly.
 
-#### Actual behavior
+### Expected behavior
 
-#### Steps to reproduce the behavior
+### Actual behavior
 
-#### Lean Beeftext version (for example, Lean Beeftext 1.0.0 Portable Edition)
+### Steps to reproduce
 
-#### Operating system version (e.g Windows 10)
+### Lean Beeftext version
+For example: `1.0.0`.
+
+### Distribution
+Installed or portable?
+
+### Windows version
+
+### Triggering details
+Automatic or manual substitution? If a specific combo is involved, include a minimal sanitized keyword/snippet that reproduces the problem.
+
+### Additional context
+Screenshots, relevant non-sensitive diagnostic information, or anything else that helps reproduce the issue.
